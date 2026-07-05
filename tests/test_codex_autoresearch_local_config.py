@@ -85,7 +85,8 @@ class CodexAutoresearchLocalConfigTest(unittest.TestCase):
 
         self.assertEqual(report["script"], "autoresearch-doctor")
         self.assertTrue(checks["skill_exists"]["ok"])
-        self.assertTrue(checks["vendor_exists"]["ok"])
+        self.assertFalse(checks["vendor_exists"]["required"])
+        self.assertEqual(checks["vendor_exists"]["severity"], "info")
         self.assertTrue(checks["lock_exists"]["ok"])
         self.assertTrue(checks["trial_config_exists"]["ok"])
         self.assertTrue(checks["trial_submit_script_exists"]["ok"])
@@ -111,6 +112,8 @@ class CodexAutoresearchLocalConfigTest(unittest.TestCase):
             self.assertIn("doctor.ps1 -Json", text)
             self.assertIn("codex exec", text)
             self.assertIn("SSH", text)
+            self.assertIn("vendor", text)
+            self.assertIn("informational", text)
 
     def test_skill_documents_controlled_trial_bridge(self) -> None:
         skill_md = (PROJECT_ROOT / ".agents" / "skills" / "codex-autoresearch" / "SKILL.md").read_text(

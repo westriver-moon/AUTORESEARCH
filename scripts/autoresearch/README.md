@@ -27,6 +27,11 @@ or start training. It reports `ok: false` when the project is not ready for a
 managed autoresearch run, for example when the target project is not a git
 repository.
 
+`vendor_exists` is informational. The optional upstream snapshot under
+`.agents\vendor\codex-autoresearch-windows-skill` is ignored by Git and is not
+required for a fresh clone to pass the core autoresearch doctor checks. Restore
+that directory only when you need to compare against the upstream skill source.
+
 For Karpathy-style runs, use the remote trial bridge as the verify command:
 
 ```powershell

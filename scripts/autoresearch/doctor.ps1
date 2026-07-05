@@ -136,12 +136,19 @@ function New-Check {
         [Parameter(Mandatory = $true)]
         [bool] $Ok,
         [Parameter(Mandatory = $false)]
-        [string] $Detail = ""
+        [string] $Detail = "",
+        [Parameter(Mandatory = $false)]
+        [bool] $Required = $true,
+        [Parameter(Mandatory = $false)]
+        [ValidateSet("error", "warning", "info")]
+        [string] $Severity = "error"
     )
 
     return [pscustomobject] @{
         name = $Name
         ok = $Ok
+        required = $Required
+        severity = $Severity
         detail = $Detail
     }
 }
@@ -163,7 +170,12 @@ $gitRoot = Get-GitRepoRoot -ProjectRoot $projectRoot
 
 $checks = @()
 $checks += New-Check -Name "skill_exists" -Ok (Test-Path -LiteralPath $skillMd) -Detail $skillMd
-$checks += New-Check -Name "vendor_exists" -Ok (Test-Path -LiteralPath $vendorPath) -Detail $vendorPath
+$checks += New-Check `
+    -Name "vendor_exists" `
+    -Ok (Test-Path -LiteralPath $vendorPath) `
+    -Detail ($vendorPath + " (optional upstream snapshot; ignored by Git)") `
+    -Required $false `
+    -Severity "info"
 $checks += New-Check -Name "lock_exists" -Ok (Test-Path -LiteralPath $lockPath) -Detail $lockPath
 $checks += New-Check -Name "python_available" -Ok (Test-CommandAvailable -Name ([string] $config.PythonCommand)) -Detail ([string] $config.PythonCommand)
 $checks += New-Check -Name "git_available" -Ok (Test-CommandAvailable -Name "git") -Detail "git"
@@ -199,9 +211,9 @@ $booleanPolicyOk = (
 )
 $checks += New-Check -Name "local_policy_is_restricted" -Ok $booleanPolicyOk -Detail "config/autoresearch*.psd1"
 
-$requiredChecks = $checks
+$requiredChecks = @($checks | Where-Object { [bool] $_.required })
 if (-not [bool] $config.RequireGitRepo) {
-    $requiredChecks = @($checks | Where-Object { $_.name -ne "project_is_git_repo" })
+    $requiredChecks = @($requiredChecks | Where-Object { $_.name -ne "project_is_git_repo" })
 }
 
 $ok = -not [bool] (@($requiredChecks | Where-Object { -not $_.ok }).Count)

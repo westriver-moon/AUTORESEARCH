@@ -90,8 +90,9 @@ are ignored by Git.
 ## Local Codex Autoresearch Adapter
 
 The project-local `codex-autoresearch` skill is installed under
-`.agents/skills/codex-autoresearch/`, with the upstream Windows skill preserved
-under `.agents/vendor/codex-autoresearch-windows-skill/`.
+`.agents/skills/codex-autoresearch/`. The upstream Windows skill snapshot under
+`.agents/vendor/codex-autoresearch-windows-skill/` is optional, ignored by Git,
+and reported by the autoresearch doctor as informational only.
 
 This adapter is foreground-only and explicit-invocation-only. It must not use
 background runtime control, `codex exec`, hooks, Full Access bypass paths, or
