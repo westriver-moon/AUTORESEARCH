@@ -58,11 +58,21 @@ foreach ($targetSpec in $targets) {
     }
 }
 
-$status = New-StatusObject -ScriptName "fetch-results.ps1" -Ok $true -ExperimentId $ExperimentId -Details @{
+$ok = ($fetched.Count -gt 0)
+$details = @{
     remote_results = $remoteResults
     local_dir = $localDir
     fetched = $fetched
 }
+if (-not $ok) {
+    $details["reason"] = "no_result_files_fetched"
+}
+
+$status = New-StatusObject -ScriptName "fetch-results.ps1" -Ok $ok -ExperimentId $ExperimentId -Details $details
 
 $outPath = Get-StatusFilePath -ProjectRoot $projectRoot -ExperimentId $ExperimentId -Name "fetch-results"
 Write-StatusJson -Data $status -Path $outPath -Json:$Json
+
+if (-not $ok) {
+    exit 1
+}

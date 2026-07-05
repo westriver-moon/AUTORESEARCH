@@ -10,10 +10,15 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 REMOTE_CONFIG = PROJECT_ROOT / "config" / "remote.example.psd1"
 TRIAL_CONFIG = PROJECT_ROOT / "config" / "autoresearch-train.example.psd1"
 SUBMIT_TRIAL = PROJECT_ROOT / "scripts" / "remote" / "submit-autoresearch-trial.ps1"
+SUBMIT_SMOKE = PROJECT_ROOT / "scripts" / "remote" / "submit-smoke-test.ps1"
+SUBMIT_JOB = PROJECT_ROOT / "scripts" / "remote" / "submit-job.ps1"
+CHECK_JOB = PROJECT_ROOT / "scripts" / "remote" / "check-job.ps1"
+REMOTE_CHECK_JOB = PROJECT_ROOT / "scripts" / "remote" / "remote-bin" / "check_job.sh"
 SYNC_CODE = PROJECT_ROOT / "scripts" / "remote" / "sync-code.ps1"
 FETCH_RESULTS = PROJECT_ROOT / "scripts" / "remote" / "fetch-results.ps1"
 DEPLOY_REMOTE_BIN = PROJECT_ROOT / "scripts" / "remote" / "deploy-remote-bin.ps1"
 RUN_LOCAL_CHECKS = PROJECT_ROOT / "scripts" / "remote" / "run-local-checks.ps1"
+TRAINING_LIB = PROJECT_ROOT / "scripts" / "remote" / "lib" / "training.ps1"
 RUN_TRIAL = PROJECT_ROOT / "scripts" / "remote" / "remote-bin" / "run_autoresearch_trial.sh"
 REMOTE_COMMON = PROJECT_ROOT / "scripts" / "remote" / "lib" / "common.ps1"
 REMOTE_README = PROJECT_ROOT / "scripts" / "remote" / "README.md"
@@ -52,13 +57,48 @@ class RemoteAutoresearchTrialBridgeTest(unittest.TestCase):
         script = SUBMIT_TRIAL.read_text(encoding="utf-8")
 
         self.assertIn("RemoteAutoresearchTrialEntry", script)
-        self.assertIn("Get-TrialConfig", script)
+        self.assertIn("Get-TrainingConfig", script)
         self.assertIn("--max-seconds", script)
         self.assertIn("--smoke-batches", script)
         self.assertIn("DryRun", script)
         self.assertNotIn("RemoteTrainEntry", script)
         self.assertNotIn("ConfirmFullTraining", script)
         self.assertNotIn("submit-job.ps1", script)
+
+    def test_remote_root_is_exported_for_entrypoint_commands(self) -> None:
+        training_lib = TRAINING_LIB.read_text(encoding="utf-8")
+
+        self.assertIn("Add-RemoteRootExport", training_lib)
+        self.assertIn("REMOTE_ROOT=", training_lib)
+        self.assertIn("export REMOTE_ROOT", training_lib)
+
+        for path in (SUBMIT_TRIAL, SUBMIT_SMOKE, SUBMIT_JOB, CHECK_JOB, PROJECT_ROOT / "scripts" / "remote" / "cancel-own-job.ps1"):
+            script = path.read_text(encoding="utf-8")
+            self.assertIn("Add-RemoteRootExport", script)
+
+    def test_smoke_and_full_train_reuse_autoresearch_training_config(self) -> None:
+        smoke = SUBMIT_SMOKE.read_text(encoding="utf-8")
+        full = SUBMIT_JOB.read_text(encoding="utf-8")
+
+        for script in (smoke, full):
+            self.assertIn("Get-TrainingConfig", script)
+            self.assertIn("Add-TrainingRemoteArgs", script)
+
+        training_lib = TRAINING_LIB.read_text(encoding="utf-8")
+        for arg_name in ("project-root", "python", "data-root", "config", "pretrained", "gpu"):
+            self.assertIn(f'-Name "{arg_name}"', training_lib)
+
+        self.assertIn("--smoke-batches", smoke)
+        self.assertIn("--confirm-full-training", full)
+        self.assertIn("Full training requires -ConfirmFullTraining.", full)
+
+    def test_check_job_not_found_remains_failure(self) -> None:
+        local = CHECK_JOB.read_text(encoding="utf-8")
+        remote = REMOTE_CHECK_JOB.read_text(encoding="utf-8")
+
+        self.assertIn("remote_state", local)
+        self.assertIn('"not_found"', local)
+        self.assertIn('sys.exit(1 if data.get("state") == "not_found" else 0)', remote)
 
     def test_submit_trial_has_hard_parameter_caps(self) -> None:
         script = SUBMIT_TRIAL.read_text(encoding="utf-8")
@@ -82,6 +122,8 @@ class RemoteAutoresearchTrialBridgeTest(unittest.TestCase):
             self.assertIn(f'"{target}"', script)
         self.assertIn("test -e", script)
         self.assertIn("Invoke-RemoteScpFrom", script)
+        self.assertIn('$ok = ($fetched.Count -gt 0)', script)
+        self.assertIn("no_result_files_fetched", script)
 
     def test_local_remote_static_check_runs_without_remote_access(self) -> None:
         completed = subprocess.run(

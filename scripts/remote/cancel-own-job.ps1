@@ -13,6 +13,7 @@ $remoteScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $remoteScriptRoot "lib\common.ps1")
 . (Join-Path $remoteScriptRoot "lib\ssh.ps1")
 . (Join-Path $remoteScriptRoot "lib\result.ps1")
+. (Join-Path $remoteScriptRoot "lib\training.ps1")
 
 Assert-ExperimentId -ExperimentId $ExperimentId
 $projectRoot = Get-ProjectRoot -RemoteScriptRoot $remoteScriptRoot
@@ -23,7 +24,8 @@ if (-not [string]::IsNullOrWhiteSpace($SshConfigPath)) { $config.SshConfigPath =
 $entry = [string] $config.RemoteCancelEntry
 Assert-RemotePath -Path $entry -Name "RemoteCancelEntry"
 
-$cmdText = "test -x '$entry' && '$entry' --experiment-id '$ExperimentId'"
+$cmdText = "test -x " + (Quote-PosixSingle $entry) + " && " + (Quote-PosixSingle $entry) + " --experiment-id " + (Quote-PosixSingle $ExperimentId)
+$cmdText = Add-RemoteRootExport -CommandText $cmdText -RemoteWorkspaceRoot ([string] $config.RemoteWorkspaceRoot)
 $remoteCommand = "bash -lc " + (Quote-PosixSingle $cmdText)
 $result = Invoke-RemoteSsh `
     -RemoteHost ([string] $config.RemoteHost) `
@@ -45,4 +47,3 @@ Write-StatusJson -Data $status -Path $outPath -Json:$Json
 if (-not $ok) {
     exit 1
 }
-

@@ -45,6 +45,7 @@ fi
 STATUS_FILE="${STATUS_FILE}" TMUX_RUNNING="${tmux_running}" python3 - <<'PY'
 import json
 import os
+import sys
 from datetime import datetime, timezone
 
 path = os.environ["STATUS_FILE"]
@@ -53,5 +54,5 @@ with open(path, "r", encoding="utf-8") as f:
 data["checked_at"] = datetime.now(timezone.utc).isoformat()
 data["tmux_running"] = os.environ.get("TMUX_RUNNING") == "true"
 print(json.dumps(data, ensure_ascii=False))
+sys.exit(1 if data.get("state") == "not_found" else 0)
 PY
-

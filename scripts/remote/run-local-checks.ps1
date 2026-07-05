@@ -41,13 +41,21 @@ function Read-TextIfPresent {
 $criticalScripts = @(
     "doctor.ps1",
     "submit-autoresearch-trial.ps1",
+    "submit-smoke-test.ps1",
+    "submit-job.ps1",
+    "check-job.ps1",
     "sync-code.ps1",
     "fetch-results.ps1",
+    "cancel-own-job.ps1",
     "lib\common.ps1",
     "lib\ssh.ps1",
     "lib\paths.ps1",
     "lib\result.ps1",
-    "remote-bin\run_autoresearch_trial.sh"
+    "lib\training.ps1",
+    "remote-bin\run_autoresearch_trial.sh",
+    "remote-bin\run_smoke_test.sh",
+    "remote-bin\run_train.sh",
+    "remote-bin\check_job.sh"
 )
 foreach ($relative in $criticalScripts) {
     $path = Join-Path $remoteScriptRoot $relative
@@ -90,6 +98,30 @@ Add-Check `
     -Ok (($submitText -match '\$effectiveMaxSeconds\s+-gt\s+3600') -and $submitText.Contains("MaxSeconds must be between 1 and 3600")) `
     -Detail "MaxSeconds must be clamped to 1..3600."
 
+$trainingText = Read-TextIfPresent -Path (Join-Path $remoteScriptRoot "lib\training.ps1")
+Add-Check `
+    -Name "remote_root_export_helper_exists" `
+    -Ok ($trainingText.Contains("Add-RemoteRootExport") -and $trainingText.Contains("REMOTE_ROOT=") -and $trainingText.Contains("export REMOTE_ROOT")) `
+    -Detail "Remote entrypoint commands must receive RemoteWorkspaceRoot as REMOTE_ROOT."
+
+$submitSmokeText = Read-TextIfPresent -Path (Join-Path $remoteScriptRoot "submit-smoke-test.ps1")
+$submitJobText = Read-TextIfPresent -Path (Join-Path $remoteScriptRoot "submit-job.ps1")
+Add-Check `
+    -Name "smoke_reuses_autoresearch_training_config" `
+    -Ok ($submitSmokeText.Contains("Get-TrainingConfig") -and $submitSmokeText.Contains("Add-TrainingRemoteArgs") -and $submitSmokeText.Contains("--smoke-batches")) `
+    -Detail "submit-smoke-test.ps1 must pass the shared autoresearch training config."
+Add-Check `
+    -Name "full_train_reuses_autoresearch_training_config" `
+    -Ok ($submitJobText.Contains("Get-TrainingConfig") -and $submitJobText.Contains("Add-TrainingRemoteArgs") -and $submitJobText.Contains("--confirm-full-training")) `
+    -Detail "submit-job.ps1 must pass the shared autoresearch training config."
+
+$checkJobText = Read-TextIfPresent -Path (Join-Path $remoteScriptRoot "check-job.ps1")
+$remoteCheckJobText = Read-TextIfPresent -Path (Join-Path $remoteScriptRoot "remote-bin\check_job.sh")
+Add-Check `
+    -Name "check_job_not_found_is_failure" `
+    -Ok ($checkJobText.Contains('remote_state') -and $checkJobText.Contains('"not_found"') -and $remoteCheckJobText.Contains('sys.exit(1 if data.get("state") == "not_found" else 0)')) `
+    -Detail "not_found status must not become a successful check on later polling."
+
 $syncText = Read-TextIfPresent -Path (Join-Path $remoteScriptRoot "sync-code.ps1")
 Add-Check `
     -Name "sync_code_uses_path_boundary_check" `
@@ -108,6 +140,10 @@ Add-Check `
     -Name "fetch_results_whitelist_extended" `
     -Ok ($fetchTargetsPresent -and $fetchText.Contains("test -e") -and $fetchText.Contains("Invoke-RemoteScpFrom")) `
     -Detail "Allowed result targets must stay explicit and optional."
+Add-Check `
+    -Name "fetch_results_empty_is_failure" `
+    -Ok ($fetchText.Contains('$ok = ($fetched.Count -gt 0)') -and $fetchText.Contains("no_result_files_fetched") -and $fetchText.Contains("exit 1")) `
+    -Detail "Fetching no result files should fail clearly."
 
 $failed = @($checks | Where-Object { -not $_.ok })
 $ok = ($failed.Count -eq 0)
