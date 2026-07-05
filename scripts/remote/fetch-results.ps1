@@ -27,8 +27,15 @@ $remoteResults = Join-RemotePath -Left $remoteExperimentRoot -Right "results"
 Assert-RemotePath -Path $remoteResults -Name "remoteResults"
 
 $fetched = @()
-$targets = @("metrics.json", "logs")
-foreach ($target in $targets) {
+$targets = @(
+    @{ Name = "metrics.json"; Recurse = $false },
+    @{ Name = "summary.json"; Recurse = $false },
+    @{ Name = "config_used.yaml"; Recurse = $false },
+    @{ Name = "logs"; Recurse = $true },
+    @{ Name = "error_samples"; Recurse = $true }
+)
+foreach ($targetSpec in $targets) {
+    $target = [string] $targetSpec.Name
     $remotePath = Join-RemotePath -Left $remoteResults -Right $target
     $existsCommand = "bash -lc " + (Quote-PosixSingle "test -e '$remotePath'")
     $exists = Invoke-RemoteSsh `
@@ -40,7 +47,7 @@ foreach ($target in $targets) {
 
     if ($exists.exit_code -eq 0) {
         $localTarget = Join-Path $localDir $target
-        $recurse = ($target -eq "logs")
+        $recurse = [bool] $targetSpec.Recurse
         Invoke-RemoteScpFrom `
             -RemoteHost ([string] $config.RemoteHost) `
             -SshConfigPath ([string] $config.SshConfigPath) `
@@ -59,4 +66,3 @@ $status = New-StatusObject -ScriptName "fetch-results.ps1" -Ok $true -Experiment
 
 $outPath = Get-StatusFilePath -ProjectRoot $projectRoot -ExperimentId $ExperimentId -Name "fetch-results"
 Write-StatusJson -Data $status -Path $outPath -Json:$Json
-

@@ -117,8 +117,12 @@ if ((-not [string]::IsNullOrWhiteSpace($effectiveGpu)) -and ($effectiveGpu -notm
 }
 $effectiveSmokeBatches = [int] $trial["SmokeBatches"]
 $effectiveMaxSeconds = [int] $trial["MaxSeconds"]
-if ($effectiveSmokeBatches -lt 1) { throw "SmokeBatches must be at least 1." }
-if ($effectiveMaxSeconds -lt 1) { throw "MaxSeconds must be at least 1." }
+if (($effectiveSmokeBatches -lt 1) -or ($effectiveSmokeBatches -gt 10)) {
+    throw "SmokeBatches must be between 1 and 10 inclusive. Received: $effectiveSmokeBatches."
+}
+if (($effectiveMaxSeconds -lt 1) -or ($effectiveMaxSeconds -gt 3600)) {
+    throw "MaxSeconds must be between 1 and 3600 inclusive. Received: $effectiveMaxSeconds."
+}
 
 $cmdText = "test -x " + (Quote-PosixSingle $entry) + " && " + (Quote-PosixSingle $entry) + " --experiment-id " + (Quote-PosixSingle $ExperimentId)
 $cmdText = Add-RemoteArg -CommandText $cmdText -Name "project-root" -Value ([string] $trial["RemoteProjectRoot"])

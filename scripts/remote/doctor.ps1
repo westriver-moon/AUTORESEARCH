@@ -88,7 +88,7 @@ $remoteEntryCheck = Invoke-RemoteSsh `
 $checks.remote_entrypoints_exist = ($remoteEntryCheck.exit_code -eq 0)
 $checks.remote_entrypoints = $remoteEntries
 
-$coreOk = [bool] ($checks.ssh_config_exists -and ($checks.ssh_exit_code -eq 0))
+$coreOk = [bool] ($checks.ssh_config_exists -and ($checks.ssh_exit_code -eq 0) -and $checks.remote_entrypoints_exist)
 $proxyOk = [bool] ($checks.tunnel_process_running -and $checks.remote_proxy_port_open -and $checks.remote_proxy_scripts_exist)
 
 $status = New-StatusObject -ScriptName "doctor.ps1" -Ok $coreOk -ExperimentId $ExperimentId -Details @{
