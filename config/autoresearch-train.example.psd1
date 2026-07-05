@@ -5,11 +5,11 @@
     MetricName = 'mAP'
     Direction = 'higher'
 
-    RemoteProjectRoot = '/home/cgv841/ybj/PMT-SYSU'
-    PythonBin = '/home/cgv841/anaconda3/envs/reid/bin/python'
-    DataRoot = '/home/cgv841/datasets/SYSU-MM01'
-    PmtConfig = '/home/cgv841/ybj/PMT-SYSU/pmt_sysu/config/sysu_pmt.yaml'
-    Pretrained = '/home/cgv841/ybj/PMT-SYSU/pretrained/jx_vit_base_p16_224-80ecf9dd.pth'
+    RemoteProjectRoot = '/home/research/researchops/PMT-SYSU'
+    PythonBin = '/opt/conda/envs/research/bin/python'
+    DataRoot = '/data/SYSU-MM01'
+    PmtConfig = '/home/research/researchops/PMT-SYSU/pmt_sysu/config/sysu_pmt.yaml'
+    Pretrained = '/home/research/researchops/PMT-SYSU/pretrained/jx_vit_base_p16_224-80ecf9dd.pth'
 
     Gpu = '0'
     SmokeBatches = 1

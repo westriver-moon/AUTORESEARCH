@@ -1,14 +1,15 @@
 # Research Remote Operations
 
 This project keeps remote GPU operations behind fixed PowerShell entrypoints.
-The scripts are designed for the current local setup:
+The tracked files are safe templates; machine-specific host aliases, remote
+user paths, SSH settings, and API keys should live only in ignored local config
+files.
 
 - Windows PowerShell 5.1 on the local workstation.
 - OpenSSH from `C:\Windows\System32\OpenSSH`.
-- SSH host alias `lab-server` for normal remote commands.
-- SSH host alias `lab-server-codex-tunnel` only for the Codex proxy tunnel.
-- Remote Linux account `cgv841`.
-- Remote research root `/home/cgv841/ybj`, treated as the open workspace root.
+- SSH host alias configured in `config/remote.local.psd1`.
+- Optional tunnel alias configured in `config/remote.local.psd1`.
+- Remote research root configured in `config/remote.local.psd1`.
 
 ## Layout
 
@@ -71,19 +72,20 @@ Experiment automation should call these fixed entrypoints only.
   `submit-autoresearch-trial.ps1`, `check-job.ps1`, and `fetch-results.ps1`.
 - `submit-smoke-test.ps1` remains available for manual fixed smoke checks.
 - Full training requires `submit-job.ps1 -ConfirmFullTraining`.
-- Remote operations use `lab-server`, never `lab-server-codex-tunnel`.
-- The tunnel alias is reserved for maintaining `127.0.0.1:7897`.
-- Remote experiment files are created under `/home/cgv841/ybj/experiments/<experiment-id>`.
-- Fixed remote entry scripts live under `/home/cgv841/ybj/bin`.
+- Remote operations use the normal SSH host alias, never the tunnel-only alias.
+- The tunnel alias is reserved for maintaining the local proxy port.
+- Remote experiment files are created under `<remote-workspace-root>/experiments/<experiment-id>`.
+- Fixed remote entry scripts live under `<remote-workspace-root>/bin`.
 
 The local copies of those remote entry scripts are kept in
-`scripts/remote/remote-bin/` and deployed to `/home/cgv841/ybj/bin`.
+`scripts/remote/remote-bin/` and deployed to `<remote-workspace-root>/bin`.
 
 ## Local configuration
 
-The default values match the current workstation as closely as possible.
-If paths change, create `config/remote.local.psd1` using
-`config/remote.example.psd1` as the template.
+Copy `config/remote.example.psd1` to `config/remote.local.psd1` for real
+server values. Copy `config/autoresearch-train.example.psd1` to
+`config/autoresearch-train.local.psd1` for real training paths. The local files
+are ignored by Git.
 
 ## Local Codex Autoresearch Adapter
 

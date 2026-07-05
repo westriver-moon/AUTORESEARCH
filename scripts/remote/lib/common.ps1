@@ -15,18 +15,18 @@ function Get-DefaultRemoteConfig {
     $sshConfig = Join-Path $env:USERPROFILE ".ssh\config"
 
     return @{
-        RemoteHost = "lab-server"
-        TunnelAlias = "lab-server-codex-tunnel"
+        RemoteHost = "your-gpu-host"
+        TunnelAlias = "your-gpu-host-codex-tunnel"
         SshConfigPath = $sshConfig
         LocalTunnelScript = ""
-        ProxyTaskName = "CodexProxyTunnelLabServer-Every5Min"
-        RemoteProxyRoot = "/home/cgv841/ybj/non_research/codex_proxy"
-        RemoteWorkspaceRoot = "/home/cgv841/ybj"
-        RemoteAutoresearchTrialEntry = "/home/cgv841/ybj/bin/run_autoresearch_trial.sh"
-        RemoteSmokeEntry = "/home/cgv841/ybj/bin/run_smoke_test.sh"
-        RemoteTrainEntry = "/home/cgv841/ybj/bin/run_train.sh"
-        RemoteStatusEntry = "/home/cgv841/ybj/bin/check_job.sh"
-        RemoteCancelEntry = "/home/cgv841/ybj/bin/cancel_job.sh"
+        ProxyTaskName = "CodexProxyTunnelGpuHost-Every5Min"
+        RemoteProxyRoot = "/home/research/researchops/non_research/codex_proxy"
+        RemoteWorkspaceRoot = "/home/research/researchops"
+        RemoteAutoresearchTrialEntry = "/home/research/researchops/bin/run_autoresearch_trial.sh"
+        RemoteSmokeEntry = "/home/research/researchops/bin/run_smoke_test.sh"
+        RemoteTrainEntry = "/home/research/researchops/bin/run_train.sh"
+        RemoteStatusEntry = "/home/research/researchops/bin/check_job.sh"
+        RemoteCancelEntry = "/home/research/researchops/bin/cancel_job.sh"
         ConnectTimeoutSec = 15
         ProxyPort = 7897
     }

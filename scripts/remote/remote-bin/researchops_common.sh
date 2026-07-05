@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REMOTE_ROOT="${REMOTE_ROOT:-/home/cgv841/ybj}"
+REMOTE_ROOT="${REMOTE_ROOT:-/home/research/researchops}"
 DEFAULT_PROJECT_ROOT="${PROJECT_ROOT:-${REMOTE_ROOT}/PMT-SYSU}"
-DEFAULT_PYTHON_BIN="${PYTHON_BIN:-/home/cgv841/anaconda3/envs/reid/bin/python}"
-DEFAULT_DATA_ROOT="${DATA_ROOT:-/home/cgv841/datasets/SYSU-MM01}"
+DEFAULT_PYTHON_BIN="${PYTHON_BIN:-/opt/conda/envs/research/bin/python}"
+DEFAULT_DATA_ROOT="${DATA_ROOT:-/data/SYSU-MM01}"
 DEFAULT_PMT_CONFIG="${PMT_CONFIG:-${DEFAULT_PROJECT_ROOT}/pmt_sysu/config/sysu_pmt.yaml}"
 DEFAULT_PRETRAIN="${PRETRAIN:-${DEFAULT_PROJECT_ROOT}/pretrained/jx_vit_base_p16_224-80ecf9dd.pth}"
 DEFAULT_GPU="${GPU:-0}"
@@ -148,4 +148,3 @@ write_last_metric() {
     printf '{"available": false, "reason": "metrics.jsonl not found"}\n' > "${results_dir}/metrics.json"
   fi
 }
-

@@ -22,7 +22,8 @@ class RemoteAutoresearchTrialBridgeTest(unittest.TestCase):
 
         for text in (remote_config, common):
             self.assertIn("RemoteAutoresearchTrialEntry", text)
-            self.assertIn("/home/cgv841/ybj/bin/run_autoresearch_trial.sh", text)
+            self.assertIn("run_autoresearch_trial.sh", text)
+            self.assertNotIn("/home/cgv841/", text)
 
     def test_remote_doctor_checks_fixed_entrypoints(self) -> None:
         doctor = REMOTE_DOCTOR.read_text(encoding="utf-8")

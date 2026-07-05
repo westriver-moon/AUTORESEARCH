@@ -3,17 +3,18 @@
 This directory is the only supported interface between research automation and
 the remote GPU host.
 
-The remote workspace root is `/home/cgv841/ybj`. Automation is allowed to
-create and manage files under this root through the fixed entrypoints below.
-The deployed remote shell scripts live in `/home/cgv841/ybj/bin`, and their
-local source copies are kept in `scripts/remote/remote-bin`.
+The remote workspace root is configured by `config/remote.local.psd1`.
+Automation is allowed to create and manage files under that root through the
+fixed entrypoints below. The deployed remote shell scripts live in
+`<remote-workspace-root>/bin`, and their local source copies are kept in
+`scripts/remote/remote-bin`.
 
 ## Entry points
 
 ```text
 doctor.ps1               Read-only health check.
 ensure-connectivity.ps1  Starts the local tunnel helper when needed, then checks SSH and proxy status.
-deploy-remote-bin.ps1    Deploys fixed remote shell entrypoints to /home/cgv841/ybj/bin.
+deploy-remote-bin.ps1    Deploys fixed remote shell entrypoints to <remote-workspace-root>/bin.
 sync-code.ps1            Copies a local project path into the remote experiment workspace.
 submit-autoresearch-trial.ps1
                          Runs a bounded Karpathy-style trial verify command.
@@ -54,13 +55,13 @@ experiments/<experiment-id>/remote/
 Remote experiment files are expected under:
 
 ```text
-/home/cgv841/ybj/experiments/<experiment-id>/
+<remote-workspace-root>/experiments/<experiment-id>/
 ```
 
 ## Prohibited behavior
 
 - Do not call arbitrary SSH commands from research automation.
-- Do not use `lab-server-codex-tunnel` for experiment work.
+- Do not use the tunnel-only SSH alias for experiment work.
 - Do not read SSH private key contents.
 - Destructive deletion needs a dedicated confirmed entrypoint.
 - Do not run full training without `submit-job.ps1 -ConfirmFullTraining`.
