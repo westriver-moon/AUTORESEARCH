@@ -1,0 +1,34 @@
+skills:
+  - name: codex-autoresearch
+    source_repo: https://github.com/yourskenny/codex-autoresearch-windows-skill.git
+    source_commit: 4c483edb961e8418aeaee273eedb91c665e2f12e
+    vendor_path: .agents/vendor/codex-autoresearch-windows-skill
+    install_path: .agents/skills/codex-autoresearch
+    install_scope: project
+    adapted_for:
+      os: windows
+      app: Codex App
+      shell: powershell
+    policy:
+      allow_implicit_invocation: false
+      invocation: explicit_only
+      foreground_enabled: true
+      background_enabled: false
+      exec_enabled: false
+      hooks_enabled: false
+      controlled_remote_trial_bridge_enabled: true
+      full_training_from_skill_enabled: false
+      full_access_enabled: false
+      dangerously_bypass_approvals_and_sandbox: false
+      ssh_enabled_during_skill_launch: false
+      gpu_training_enabled_during_skill_launch: false
+      python_command: python
+    local_modifications:
+      - Project-local installation under .agents/skills/codex-autoresearch.
+      - Preserved original repository clone under .agents/vendor/codex-autoresearch-windows-skill.
+      - Disabled implicit invocation in agents/openai.yaml.
+      - Rewrote Codex-facing instructions for foreground-only operation.
+      - Disabled background runtime, exec mode, hooks, and Full Access bypass paths.
+      - Added a project-controlled Karpathy-style remote trial bridge for bounded GPU verification.
+      - Adapted Windows-facing helper command examples from python3 to python.
+      - Added project-local simulation tests for artifacts, retention, rollback, and no background Codex CLI invocation.

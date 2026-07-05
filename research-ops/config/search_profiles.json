@@ -1,0 +1,233 @@
+{
+  "version": 1,
+  "profiles": {
+    "ccf-ai-ab": {
+      "description": "CCF AI category A/B conference profile for AI paper discovery.",
+      "source": {
+        "name": "CCF Academic Evaluation - Artificial Intelligence",
+        "url": "https://www.ccf.org.cn/Academic_Evaluation/AI/"
+      },
+      "venue_groups": {
+        "all": [
+          "AAAI",
+          "NeurIPS",
+          "ACL",
+          "CVPR",
+          "ICCV",
+          "ICML",
+          "IJCAI",
+          "COLT",
+          "EMNLP",
+          "ECAI",
+          "ECCV",
+          "ICRA",
+          "ICAPS",
+          "ICCBR",
+          "COLING",
+          "KR",
+          "UAI",
+          "AAMAS",
+          "PPSN",
+          "NAACL"
+        ],
+        "vision": [
+          "CVPR",
+          "ICCV",
+          "ECCV"
+        ],
+        "ml": [
+          "NeurIPS",
+          "ICML",
+          "COLT",
+          "UAI"
+        ],
+        "nlp": [
+          "ACL",
+          "EMNLP",
+          "COLING",
+          "NAACL"
+        ],
+        "general-ai": [
+          "AAAI",
+          "IJCAI",
+          "ECAI",
+          "KR",
+          "AAMAS"
+        ],
+        "robotics": [
+          "ICRA"
+        ]
+      },
+      "venues": [
+        {
+          "abbr": "AAAI",
+          "rank": "A",
+          "aliases": [
+            "AAAI Conference on Artificial Intelligence",
+            "National Conference on Artificial Intelligence"
+          ]
+        },
+        {
+          "abbr": "NeurIPS",
+          "rank": "A",
+          "aliases": [
+            "Neural Information Processing Systems",
+            "Advances in Neural Information Processing Systems",
+            "NIPS"
+          ]
+        },
+        {
+          "abbr": "ACL",
+          "rank": "A",
+          "aliases": [
+            "Annual Meeting of the Association for Computational Linguistics",
+            "Association for Computational Linguistics"
+          ]
+        },
+        {
+          "abbr": "CVPR",
+          "rank": "A",
+          "aliases": [
+            "IEEE/CVF Conference on Computer Vision and Pattern Recognition",
+            "IEEE Conference on Computer Vision and Pattern Recognition",
+            "Conference on Computer Vision and Pattern Recognition",
+            "Computer Vision and Pattern Recognition"
+          ]
+        },
+        {
+          "abbr": "ICCV",
+          "rank": "A",
+          "aliases": [
+            "IEEE/CVF International Conference on Computer Vision",
+            "IEEE International Conference on Computer Vision",
+            "International Conference on Computer Vision"
+          ]
+        },
+        {
+          "abbr": "ICML",
+          "rank": "A",
+          "aliases": [
+            "International Conference on Machine Learning"
+          ]
+        },
+        {
+          "abbr": "IJCAI",
+          "rank": "A",
+          "aliases": [
+            "International Joint Conference on Artificial Intelligence"
+          ]
+        },
+        {
+          "abbr": "COLT",
+          "rank": "B",
+          "aliases": [
+            "Conference on Learning Theory"
+          ]
+        },
+        {
+          "abbr": "EMNLP",
+          "rank": "B",
+          "aliases": [
+            "Conference on Empirical Methods in Natural Language Processing",
+            "Empirical Methods in Natural Language Processing"
+          ]
+        },
+        {
+          "abbr": "ECAI",
+          "rank": "B",
+          "aliases": [
+            "European Conference on Artificial Intelligence"
+          ]
+        },
+        {
+          "abbr": "ECCV",
+          "rank": "B",
+          "aliases": [
+            "European Conference on Computer Vision"
+          ]
+        },
+        {
+          "abbr": "ICRA",
+          "rank": "B",
+          "aliases": [
+            "IEEE International Conference on Robotics and Automation",
+            "International Conference on Robotics and Automation"
+          ]
+        },
+        {
+          "abbr": "ICAPS",
+          "rank": "B",
+          "aliases": [
+            "International Conference on Automated Planning and Scheduling"
+          ]
+        },
+        {
+          "abbr": "ICCBR",
+          "rank": "B",
+          "aliases": [
+            "International Conference on Case-Based Reasoning"
+          ]
+        },
+        {
+          "abbr": "COLING",
+          "rank": "B",
+          "aliases": [
+            "International Conference on Computational Linguistics"
+          ]
+        },
+        {
+          "abbr": "KR",
+          "rank": "B",
+          "aliases": [
+            "International Conference on Principles of Knowledge Representation and Reasoning",
+            "Principles of Knowledge Representation and Reasoning"
+          ]
+        },
+        {
+          "abbr": "UAI",
+          "rank": "B",
+          "aliases": [
+            "Conference on Uncertainty in Artificial Intelligence",
+            "Uncertainty in Artificial Intelligence"
+          ]
+        },
+        {
+          "abbr": "AAMAS",
+          "rank": "B",
+          "aliases": [
+            "International Conference on Autonomous Agents and Multiagent Systems",
+            "Autonomous Agents and Multiagent Systems"
+          ]
+        },
+        {
+          "abbr": "PPSN",
+          "rank": "B",
+          "aliases": [
+            "Parallel Problem Solving from Nature"
+          ]
+        },
+        {
+          "abbr": "NAACL",
+          "rank": "B",
+          "aliases": [
+            "North American Chapter of the Association for Computational Linguistics"
+          ]
+        }
+      ],
+      "query_expansions": {
+        "reid": [
+          "person re-identification",
+          "person re-id",
+          "ReID"
+        ],
+        "visible-infrared": [
+          "visible infrared",
+          "visible-infrared",
+          "RGB-infrared",
+          "cross-modality",
+          "VI-ReID"
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Paper Analyzer"
+  short_description: "Create deep Zotero paper analysis articles."
+  default_prompt: "Use $paper-analyzer to write a deep academic analysis for a Zotero paper."
+policy:
+  allow_implicit_invocation: false

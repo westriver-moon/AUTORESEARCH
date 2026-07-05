@@ -1,0 +1,588 @@
+{
+  "generated_at": "2026-07-04T10:14:39+00:00",
+  "nodes": [
+    {
+      "id": "dataset:LLCM",
+      "type": "dataset",
+      "label": "LLCM"
+    },
+    {
+      "id": "dataset:MSVR310",
+      "type": "dataset",
+      "label": "MSVR310"
+    },
+    {
+      "id": "dataset:RGBNT100",
+      "type": "dataset",
+      "label": "RGBNT100"
+    },
+    {
+      "id": "dataset:RGBNT201",
+      "type": "dataset",
+      "label": "RGBNT201"
+    },
+    {
+      "id": "dataset:RegDB",
+      "type": "dataset",
+      "label": "RegDB"
+    },
+    {
+      "id": "dataset:SYSU-MM01",
+      "type": "dataset",
+      "label": "SYSU-MM01"
+    },
+    {
+      "id": "method:Attention",
+      "type": "method",
+      "label": "Attention"
+    },
+    {
+      "id": "method:CLIP",
+      "type": "method",
+      "label": "CLIP"
+    },
+    {
+      "id": "method:Contrastive",
+      "type": "method",
+      "label": "Contrastive"
+    },
+    {
+      "id": "method:Cross-modal",
+      "type": "method",
+      "label": "Cross-modal"
+    },
+    {
+      "id": "method:Cross-modality",
+      "type": "method",
+      "label": "Cross-modality"
+    },
+    {
+      "id": "method:Mamba",
+      "type": "method",
+      "label": "Mamba"
+    },
+    {
+      "id": "method:Modality",
+      "type": "method",
+      "label": "Modality"
+    },
+    {
+      "id": "method:PMT",
+      "type": "method",
+      "label": "PMT"
+    },
+    {
+      "id": "method:Prompt",
+      "type": "method",
+      "label": "Prompt"
+    },
+    {
+      "id": "method:Token",
+      "type": "method",
+      "label": "Token"
+    },
+    {
+      "id": "method:Transformer",
+      "type": "method",
+      "label": "Transformer"
+    },
+    {
+      "id": "method:Vision Transformer",
+      "type": "method",
+      "label": "Vision Transformer"
+    },
+    {
+      "id": "metric:CMC",
+      "type": "metric",
+      "label": "CMC"
+    },
+    {
+      "id": "metric:Rank-1",
+      "type": "metric",
+      "label": "Rank-1"
+    },
+    {
+      "id": "metric:mAP",
+      "type": "metric",
+      "label": "mAP"
+    },
+    {
+      "id": "metric:mINP",
+      "type": "metric",
+      "label": "mINP"
+    },
+    {
+      "id": "paper:4XFWQY7H",
+      "type": "paper",
+      "label": "Empowering visible-infrared person re-identification with large foundation models",
+      "zotero_item_key": "4XFWQY7H",
+      "doi": null,
+      "year": ""
+    },
+    {
+      "id": "paper:8N2C65PS",
+      "type": "paper",
+      "label": "Learning with twin noisy labels for visible-infrared person re-identification",
+      "zotero_item_key": "8N2C65PS",
+      "doi": "10.1109/cvpr52688.2022.01391",
+      "year": "2022"
+    },
+    {
+      "id": "paper:DH67KGHN",
+      "type": "paper",
+      "label": "MambaPro: Multi-Modal Object Re-identification with Mamba Aggregation and Synergistic Prompt",
+      "zotero_item_key": "DH67KGHN",
+      "doi": "10.1609/aaai.v39i8.32879",
+      "year": "2025"
+    },
+    {
+      "id": "paper:EQ5C7EBT",
+      "type": "paper",
+      "label": "FMCNet: Feature-level modality compensation for visible-infrared person re-identification",
+      "zotero_item_key": "EQ5C7EBT",
+      "doi": "10.1109/cvpr52688.2022.00720",
+      "year": "2022"
+    },
+    {
+      "id": "paper:MRX3Z4SL",
+      "type": "paper",
+      "label": "Learning by aligning: Visible-infrared person re-identification using cross-modal correspondences",
+      "zotero_item_key": "MRX3Z4SL",
+      "doi": "10.1109/iccv48922.2021.01183",
+      "year": "2021"
+    },
+    {
+      "id": "paper:S7RX7UTY",
+      "type": "paper",
+      "label": "Learning memory-augmented unidirectional metrics for cross-modality person re-identification",
+      "zotero_item_key": "S7RX7UTY",
+      "doi": "10.1109/cvpr52688.2022.01876",
+      "year": "2022"
+    },
+    {
+      "id": "paper:SKYPQKLJ",
+      "type": "paper",
+      "label": "Learning Progressive Modality-Shared Transformers for Effective Visible-Infrared Person Re-identification",
+      "zotero_item_key": "SKYPQKLJ",
+      "doi": "10.1609/aaai.v37i2.25273",
+      "year": "2023"
+    },
+    {
+      "id": "task:VI-ReID",
+      "type": "task",
+      "label": "VI-ReID"
+    },
+    {
+      "id": "task:cross-modality person re-identification",
+      "type": "task",
+      "label": "cross-modality person re-identification"
+    },
+    {
+      "id": "task:multi-modal object re-identification",
+      "type": "task",
+      "label": "multi-modal object re-identification"
+    },
+    {
+      "id": "task:object re-identification",
+      "type": "task",
+      "label": "object re-identification"
+    },
+    {
+      "id": "task:person re-identification",
+      "type": "task",
+      "label": "person re-identification"
+    },
+    {
+      "id": "task:visible-infrared person re-identification",
+      "type": "task",
+      "label": "visible-infrared person re-identification"
+    },
+    {
+      "id": "venue:2021 IEEE/cvf International Conference On Computer Vision (iccv)",
+      "type": "venue",
+      "label": "2021 IEEE/cvf International Conference On Computer Vision (iccv)"
+    },
+    {
+      "id": "venue:2022 IEEE/cvf Conference On Computer Vision and Pattern Recognition (cvpr)",
+      "type": "venue",
+      "label": "2022 IEEE/cvf Conference On Computer Vision and Pattern Recognition (cvpr)"
+    },
+    {
+      "id": "venue:Proceedings of the AAAI Conference on Artificial Intelligence",
+      "type": "venue",
+      "label": "Proceedings of the AAAI Conference on Artificial Intelligence"
+    }
+  ],
+  "edges": [
+    {
+      "source": "paper:4XFWQY7H",
+      "target": "task:VI-ReID",
+      "type": "addresses_task"
+    },
+    {
+      "source": "paper:4XFWQY7H",
+      "target": "task:cross-modality person re-identification",
+      "type": "addresses_task"
+    },
+    {
+      "source": "paper:4XFWQY7H",
+      "target": "task:object re-identification",
+      "type": "addresses_task"
+    },
+    {
+      "source": "paper:4XFWQY7H",
+      "target": "task:person re-identification",
+      "type": "addresses_task"
+    },
+    {
+      "source": "paper:4XFWQY7H",
+      "target": "task:visible-infrared person re-identification",
+      "type": "addresses_task"
+    },
+    {
+      "source": "paper:4XFWQY7H",
+      "target": "metric:Rank-1",
+      "type": "reports_metric"
+    },
+    {
+      "source": "paper:4XFWQY7H",
+      "target": "metric:mAP",
+      "type": "reports_metric"
+    },
+    {
+      "source": "paper:4XFWQY7H",
+      "target": "metric:mINP",
+      "type": "reports_metric"
+    },
+    {
+      "source": "paper:4XFWQY7H",
+      "target": "dataset:LLCM",
+      "type": "uses_dataset"
+    },
+    {
+      "source": "paper:4XFWQY7H",
+      "target": "dataset:RegDB",
+      "type": "uses_dataset"
+    },
+    {
+      "source": "paper:4XFWQY7H",
+      "target": "dataset:SYSU-MM01",
+      "type": "uses_dataset"
+    },
+    {
+      "source": "paper:4XFWQY7H",
+      "target": "method:Attention",
+      "type": "uses_method_signal"
+    },
+    {
+      "source": "paper:4XFWQY7H",
+      "target": "method:CLIP",
+      "type": "uses_method_signal"
+    },
+    {
+      "source": "paper:4XFWQY7H",
+      "target": "method:Contrastive",
+      "type": "uses_method_signal"
+    },
+    {
+      "source": "paper:4XFWQY7H",
+      "target": "method:Cross-modal",
+      "type": "uses_method_signal"
+    },
+    {
+      "source": "paper:4XFWQY7H",
+      "target": "method:Cross-modality",
+      "type": "uses_method_signal"
+    },
+    {
+      "source": "paper:4XFWQY7H",
+      "target": "method:Modality",
+      "type": "uses_method_signal"
+    },
+    {
+      "source": "paper:4XFWQY7H",
+      "target": "method:Prompt",
+      "type": "uses_method_signal"
+    },
+    {
+      "source": "paper:4XFWQY7H",
+      "target": "method:Transformer",
+      "type": "uses_method_signal"
+    },
+    {
+      "source": "paper:8N2C65PS",
+      "target": "task:person re-identification",
+      "type": "addresses_task"
+    },
+    {
+      "source": "paper:8N2C65PS",
+      "target": "task:visible-infrared person re-identification",
+      "type": "addresses_task"
+    },
+    {
+      "source": "paper:8N2C65PS",
+      "target": "venue:2022 IEEE/cvf Conference On Computer Vision and Pattern Recognition (cvpr)",
+      "type": "published_in"
+    },
+    {
+      "source": "paper:DH67KGHN",
+      "target": "task:multi-modal object re-identification",
+      "type": "addresses_task"
+    },
+    {
+      "source": "paper:DH67KGHN",
+      "target": "task:object re-identification",
+      "type": "addresses_task"
+    },
+    {
+      "source": "paper:DH67KGHN",
+      "target": "task:person re-identification",
+      "type": "addresses_task"
+    },
+    {
+      "source": "paper:DH67KGHN",
+      "target": "venue:Proceedings of the AAAI Conference on Artificial Intelligence",
+      "type": "published_in"
+    },
+    {
+      "source": "paper:DH67KGHN",
+      "target": "metric:CMC",
+      "type": "reports_metric"
+    },
+    {
+      "source": "paper:DH67KGHN",
+      "target": "metric:Rank-1",
+      "type": "reports_metric"
+    },
+    {
+      "source": "paper:DH67KGHN",
+      "target": "metric:mAP",
+      "type": "reports_metric"
+    },
+    {
+      "source": "paper:DH67KGHN",
+      "target": "dataset:MSVR310",
+      "type": "uses_dataset"
+    },
+    {
+      "source": "paper:DH67KGHN",
+      "target": "dataset:RGBNT100",
+      "type": "uses_dataset"
+    },
+    {
+      "source": "paper:DH67KGHN",
+      "target": "dataset:RGBNT201",
+      "type": "uses_dataset"
+    },
+    {
+      "source": "paper:DH67KGHN",
+      "target": "method:Attention",
+      "type": "uses_method_signal"
+    },
+    {
+      "source": "paper:DH67KGHN",
+      "target": "method:CLIP",
+      "type": "uses_method_signal"
+    },
+    {
+      "source": "paper:DH67KGHN",
+      "target": "method:Contrastive",
+      "type": "uses_method_signal"
+    },
+    {
+      "source": "paper:DH67KGHN",
+      "target": "method:Mamba",
+      "type": "uses_method_signal"
+    },
+    {
+      "source": "paper:DH67KGHN",
+      "target": "method:Modality",
+      "type": "uses_method_signal"
+    },
+    {
+      "source": "paper:DH67KGHN",
+      "target": "method:Prompt",
+      "type": "uses_method_signal"
+    },
+    {
+      "source": "paper:DH67KGHN",
+      "target": "method:Token",
+      "type": "uses_method_signal"
+    },
+    {
+      "source": "paper:DH67KGHN",
+      "target": "method:Transformer",
+      "type": "uses_method_signal"
+    },
+    {
+      "source": "paper:EQ5C7EBT",
+      "target": "task:person re-identification",
+      "type": "addresses_task"
+    },
+    {
+      "source": "paper:EQ5C7EBT",
+      "target": "task:visible-infrared person re-identification",
+      "type": "addresses_task"
+    },
+    {
+      "source": "paper:EQ5C7EBT",
+      "target": "venue:2022 IEEE/cvf Conference On Computer Vision and Pattern Recognition (cvpr)",
+      "type": "published_in"
+    },
+    {
+      "source": "paper:EQ5C7EBT",
+      "target": "method:Modality",
+      "type": "uses_method_signal"
+    },
+    {
+      "source": "paper:MRX3Z4SL",
+      "target": "task:person re-identification",
+      "type": "addresses_task"
+    },
+    {
+      "source": "paper:MRX3Z4SL",
+      "target": "task:visible-infrared person re-identification",
+      "type": "addresses_task"
+    },
+    {
+      "source": "paper:MRX3Z4SL",
+      "target": "venue:2021 IEEE/cvf International Conference On Computer Vision (iccv)",
+      "type": "published_in"
+    },
+    {
+      "source": "paper:MRX3Z4SL",
+      "target": "method:Cross-modal",
+      "type": "uses_method_signal"
+    },
+    {
+      "source": "paper:S7RX7UTY",
+      "target": "task:cross-modality person re-identification",
+      "type": "addresses_task"
+    },
+    {
+      "source": "paper:S7RX7UTY",
+      "target": "task:person re-identification",
+      "type": "addresses_task"
+    },
+    {
+      "source": "paper:S7RX7UTY",
+      "target": "venue:2022 IEEE/cvf Conference On Computer Vision and Pattern Recognition (cvpr)",
+      "type": "published_in"
+    },
+    {
+      "source": "paper:S7RX7UTY",
+      "target": "method:Cross-modal",
+      "type": "uses_method_signal"
+    },
+    {
+      "source": "paper:S7RX7UTY",
+      "target": "method:Cross-modality",
+      "type": "uses_method_signal"
+    },
+    {
+      "source": "paper:S7RX7UTY",
+      "target": "method:Modality",
+      "type": "uses_method_signal"
+    },
+    {
+      "source": "paper:SKYPQKLJ",
+      "target": "task:VI-ReID",
+      "type": "addresses_task"
+    },
+    {
+      "source": "paper:SKYPQKLJ",
+      "target": "task:cross-modality person re-identification",
+      "type": "addresses_task"
+    },
+    {
+      "source": "paper:SKYPQKLJ",
+      "target": "task:object re-identification",
+      "type": "addresses_task"
+    },
+    {
+      "source": "paper:SKYPQKLJ",
+      "target": "task:person re-identification",
+      "type": "addresses_task"
+    },
+    {
+      "source": "paper:SKYPQKLJ",
+      "target": "task:visible-infrared person re-identification",
+      "type": "addresses_task"
+    },
+    {
+      "source": "paper:SKYPQKLJ",
+      "target": "venue:Proceedings of the AAAI Conference on Artificial Intelligence",
+      "type": "published_in"
+    },
+    {
+      "source": "paper:SKYPQKLJ",
+      "target": "metric:CMC",
+      "type": "reports_metric"
+    },
+    {
+      "source": "paper:SKYPQKLJ",
+      "target": "metric:Rank-1",
+      "type": "reports_metric"
+    },
+    {
+      "source": "paper:SKYPQKLJ",
+      "target": "metric:mAP",
+      "type": "reports_metric"
+    },
+    {
+      "source": "paper:SKYPQKLJ",
+      "target": "metric:mINP",
+      "type": "reports_metric"
+    },
+    {
+      "source": "paper:SKYPQKLJ",
+      "target": "dataset:RegDB",
+      "type": "uses_dataset"
+    },
+    {
+      "source": "paper:SKYPQKLJ",
+      "target": "dataset:SYSU-MM01",
+      "type": "uses_dataset"
+    },
+    {
+      "source": "paper:SKYPQKLJ",
+      "target": "method:Attention",
+      "type": "uses_method_signal"
+    },
+    {
+      "source": "paper:SKYPQKLJ",
+      "target": "method:Cross-modal",
+      "type": "uses_method_signal"
+    },
+    {
+      "source": "paper:SKYPQKLJ",
+      "target": "method:Cross-modality",
+      "type": "uses_method_signal"
+    },
+    {
+      "source": "paper:SKYPQKLJ",
+      "target": "method:Modality",
+      "type": "uses_method_signal"
+    },
+    {
+      "source": "paper:SKYPQKLJ",
+      "target": "method:PMT",
+      "type": "uses_method_signal"
+    },
+    {
+      "source": "paper:SKYPQKLJ",
+      "target": "method:Token",
+      "type": "uses_method_signal"
+    },
+    {
+      "source": "paper:SKYPQKLJ",
+      "target": "method:Transformer",
+      "type": "uses_method_signal"
+    },
+    {
+      "source": "paper:SKYPQKLJ",
+      "target": "method:Vision Transformer",
+      "type": "uses_method_signal"
+    }
+  ]
+}

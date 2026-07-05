@@ -1,0 +1,54 @@
+{
+  "generated_at": "2026-07-04T10:03:03+00:00",
+  "title": "Learning by aligning: Visible-infrared person re-identification using cross-modal correspondences",
+  "metadata": {
+    "doi": "10.1109/iccv48922.2021.01183",
+    "year": "2021",
+    "date": "2021-10-01",
+    "venue": "2021 IEEE/cvf International Conference On Computer Vision (iccv)",
+    "authors": [
+      "Hyunjong Park",
+      "Sanghoon Lee",
+      "Junghyup Lee",
+      "Bumsub Ham"
+    ],
+    "url": "https://doi.org/10.1109/iccv48922.2021.01183",
+    "item_type": "journalArticle"
+  },
+  "zotero": {
+    "item_key": "MRX3Z4SL",
+    "collection_keys": [
+      "V6A358QD"
+    ],
+    "attachment_key": null
+  },
+  "pdf": {
+    "path": null,
+    "attachment_title": null,
+    "backend": null,
+    "total_pages": 0,
+    "pages_extracted": 0,
+    "text_chars": 0
+  },
+  "sections": {
+    "abstract": "",
+    "method": "",
+    "experiment": ""
+  },
+  "entities": {
+    "tasks": [
+      "visible-infrared person re-identification",
+      "person re-identification"
+    ],
+    "datasets": [],
+    "methods": [
+      "Cross-modal"
+    ],
+    "metrics": []
+  },
+  "project_relevance": [
+    "Directly matches visible-infrared / VI-ReID.",
+    "Targets cross-modality representation or matching."
+  ],
+  "raw_text_available": false
+}

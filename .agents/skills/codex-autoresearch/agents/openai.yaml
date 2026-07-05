@@ -1,0 +1,8 @@
+interface:
+  display_name: "Codex Autoresearch"
+  short_description: "Explicit foreground-only experimentation for this project"
+  brand_color: "#2563EB"
+  default_prompt: "Use $codex-autoresearch only when explicitly invoked. This project enables foreground mode only."
+
+policy:
+  allow_implicit_invocation: false

@@ -1,0 +1,33 @@
+.env
+*.local.json
+config/autoresearch.local.psd1
+config/autoresearch-train.local.psd1
+autoresearch-results/
+experiments/*/remote/*.json
+.agents/vendor/
+research-ops/tmp/
+
+# Research operations secrets and generated artifacts
+research-ops/config/zotero.local.json
+research-ops/library/db/*.sqlite
+research-ops/library/db/*.sqlite-*
+research-ops/library/raw/**
+!research-ops/library/raw/.gitkeep
+!research-ops/library/raw/openalex/
+!research-ops/library/raw/openalex/.gitkeep
+!research-ops/library/raw/arxiv/
+!research-ops/library/raw/arxiv/.gitkeep
+research-ops/library/records/**
+!research-ops/library/records/.gitkeep
+research-ops/library/pdf/**
+!research-ops/library/pdf/.gitkeep
+research-ops/library/exports/**
+!research-ops/library/exports/.gitkeep
+research-ops/library/zotero/**
+!research-ops/library/zotero/.gitkeep
+research-ops/library/logs/**
+!research-ops/library/logs/.gitkeep
+
+# Python generated files
+__pycache__/
+*.py[cod]

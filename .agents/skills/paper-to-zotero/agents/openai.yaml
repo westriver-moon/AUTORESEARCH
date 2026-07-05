@@ -1,0 +1,6 @@
+﻿interface:
+  display_name: "Paper to Zotero"
+  short_description: "Search papers and import them into local Zotero."
+  default_prompt: "$paper-to-zotero Find 3 recent arXiv papers on graph neural networks, preview them, then import selected papers into the Zotero unread collection."
+policy:
+  allow_implicit_invocation: false

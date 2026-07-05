@@ -1,0 +1,54 @@
+{
+  "generated_at": "2026-07-04T10:09:08+00:00",
+  "title": "FMCNet: Feature-level modality compensation for visible-infrared person re-identification",
+  "metadata": {
+    "doi": "10.1109/cvpr52688.2022.00720",
+    "year": "2022",
+    "date": "2022-06-01",
+    "venue": "2022 IEEE/cvf Conference On Computer Vision and Pattern Recognition (cvpr)",
+    "authors": [
+      "Qiang Zhang",
+      "Changzhou Lai",
+      "Jianan Liu",
+      "Nianchang Huang",
+      "Jungong Han"
+    ],
+    "url": "https://doi.org/10.1109/cvpr52688.2022.00720",
+    "item_type": "journalArticle"
+  },
+  "zotero": {
+    "item_key": "EQ5C7EBT",
+    "collection_keys": [
+      "V6A358QD"
+    ],
+    "attachment_key": null
+  },
+  "pdf": {
+    "path": null,
+    "attachment_title": null,
+    "backend": null,
+    "total_pages": 0,
+    "pages_extracted": 0,
+    "text_chars": 0
+  },
+  "sections": {
+    "abstract": "",
+    "method": "",
+    "experiment": ""
+  },
+  "entities": {
+    "tasks": [
+      "visible-infrared person re-identification",
+      "person re-identification"
+    ],
+    "datasets": [],
+    "methods": [
+      "Modality"
+    ],
+    "metrics": []
+  },
+  "project_relevance": [
+    "Directly matches visible-infrared / VI-ReID."
+  ],
+  "raw_text_available": false
+}
