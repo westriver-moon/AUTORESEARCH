@@ -104,6 +104,29 @@ Add-Check `
     -Ok ($trainingText.Contains("Add-RemoteRootExport") -and $trainingText.Contains("REMOTE_ROOT=") -and $trainingText.Contains("export REMOTE_ROOT")) `
     -Detail "Remote entrypoint commands must receive RemoteWorkspaceRoot as REMOTE_ROOT."
 
+$trialTemplateText = Read-TextIfPresent -Path (Join-Path $projectRoot "config\autoresearch-train.example.psd1")
+$remoteCommonText = Read-TextIfPresent -Path (Join-Path $remoteScriptRoot "remote-bin\researchops_common.sh")
+Add-Check `
+    -Name "autoresearch_trial_defaults_to_tvilfm_pmt_vit" `
+    -Ok ($trialTemplateText.Contains("TVI-LFM") -and $trialTemplateText.Contains("pmt_vit_stage_a_pmt_recipe_288x144_768.yaml") -and $remoteCommonText.Contains("TVI-LFM") -and $remoteCommonText.Contains("pmt_vit_stage_a_pmt_recipe_288x144_768.yaml")) `
+    -Detail "Autoresearch trial template and remote shell fallback should target TVI-LFM Stage A PMT_VIT."
+Add-Check `
+    -Name "autoresearch_trial_supports_auto_gpu" `
+    -Ok ($trialTemplateText.Contains("Gpu = 'auto'") -and $remoteCommonText.Contains("resolve_gpu") -and $remoteCommonText.Contains("nvidia-smi") -and $remoteCommonText.Contains("memory.used <= 1024 MiB")) `
+    -Detail "Gpu='auto' should select an idle remote GPU through the fixed entrypoint."
+Add-Check `
+    -Name "autoresearch_trial_writes_reid_metrics_json" `
+    -Ok ($remoteCommonText.Contains("reid-metrics-v1") -and $remoteCommonText.Contains("primary_metric") -and $remoteCommonText.Contains('"metric_name": "mAP"') -and $remoteCommonText.Contains("rank1") -and $remoteCommonText.Contains("mINP")) `
+    -Detail "TVI-LFM logs should be normalized into metrics.json for autoresearch decisions."
+
+$remoteTrialText = Read-TextIfPresent -Path (Join-Path $remoteScriptRoot "remote-bin\run_autoresearch_trial.sh")
+$remoteSmokeText = Read-TextIfPresent -Path (Join-Path $remoteScriptRoot "remote-bin\run_smoke_test.sh")
+$remoteTrainText = Read-TextIfPresent -Path (Join-Path $remoteScriptRoot "remote-bin\run_train.sh")
+Add-Check `
+    -Name "remote_entrypoints_use_tvilfm_main" `
+    -Ok ($remoteTrialText.Contains("main.py") -and $remoteTrialText.Contains("--config_select") -and $remoteSmokeText.Contains("main.py") -and $remoteSmokeText.Contains("--config_select") -and $remoteTrainText.Contains("main.py") -and $remoteTrainText.Contains("--config_select") -and (-not ($remoteTrialText + $remoteSmokeText + $remoteTrainText).Contains("pmt_sysu.train"))) `
+    -Detail "Remote trial, smoke, and full-train entrypoints should execute TVI-LFM main.py."
+
 $submitSmokeText = Read-TextIfPresent -Path (Join-Path $remoteScriptRoot "submit-smoke-test.ps1")
 $submitJobText = Read-TextIfPresent -Path (Join-Path $remoteScriptRoot "submit-job.ps1")
 Add-Check `

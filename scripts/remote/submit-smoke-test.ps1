@@ -9,6 +9,7 @@ param(
     [string] $Pretrained = "",
     [string] $Gpu = "",
     [int] $SmokeBatches = 0,
+    [int] $MaxSeconds = 0,
     [string] $RemoteHost = "",
     [string] $SshConfigPath = "",
     [switch] $Json
@@ -38,19 +39,25 @@ if (-not [string]::IsNullOrWhiteSpace($RemoteConfigPath)) { $training["PmtConfig
 if (-not [string]::IsNullOrWhiteSpace($Pretrained)) { $training["Pretrained"] = $Pretrained }
 if (-not [string]::IsNullOrWhiteSpace($Gpu)) { $training["Gpu"] = $Gpu }
 if ($SmokeBatches -gt 0) { $training["SmokeBatches"] = $SmokeBatches }
+if ($MaxSeconds -gt 0) { $training["MaxSeconds"] = $MaxSeconds }
 
 $entry = [string] $config.RemoteSmokeEntry
 Assert-RemotePath -Path $entry -Name "RemoteSmokeEntry"
 Assert-TrainingRemotePaths -Training $training
 Assert-TrainingGpu -Training $training
 $effectiveSmokeBatches = [int] $training["SmokeBatches"]
+$effectiveMaxSeconds = [int] $training["MaxSeconds"]
 if ($effectiveSmokeBatches -lt 1) {
     throw "SmokeBatches must be at least 1. Received: $effectiveSmokeBatches."
+}
+if (($effectiveMaxSeconds -lt 1) -or ($effectiveMaxSeconds -gt 3600)) {
+    throw "MaxSeconds must be between 1 and 3600 inclusive. Received: $effectiveMaxSeconds."
 }
 
 $cmdText = "test -x " + (Quote-PosixSingle $entry) + " && " + (Quote-PosixSingle $entry) + " --experiment-id " + (Quote-PosixSingle $ExperimentId)
 $cmdText = Add-TrainingRemoteArgs -CommandText $cmdText -Training $training
 $cmdText += " --smoke-batches " + $effectiveSmokeBatches
+$cmdText += " --max-seconds " + $effectiveMaxSeconds
 $cmdText = Add-RemoteRootExport -CommandText $cmdText -RemoteWorkspaceRoot ([string] $config.RemoteWorkspaceRoot)
 $remoteCommand = "bash -lc " + (Quote-PosixSingle $cmdText)
 $result = Invoke-RemoteSsh `
@@ -61,6 +68,18 @@ $result = Invoke-RemoteSsh `
     -AllowFailure
 
 $ok = ($result.exit_code -eq 0)
+$remoteStatus = $null
+try {
+    if (-not [string]::IsNullOrWhiteSpace($result.output)) {
+        $remoteStatus = $result.output | ConvertFrom-Json -ErrorAction Stop
+    }
+} catch {
+    $remoteStatus = $null
+}
+$selectedGpu = ""
+if (($null -ne $remoteStatus) -and ($remoteStatus.PSObject.Properties.Name -contains "gpu")) {
+    $selectedGpu = [string] $remoteStatus.gpu
+}
 $status = New-StatusObject -ScriptName "submit-smoke-test.ps1" -Ok $ok -ExperimentId $ExperimentId -Details @{
     remote_entry = $entry
     remote_config = [string] $training["PmtConfig"]
@@ -70,7 +89,9 @@ $status = New-StatusObject -ScriptName "submit-smoke-test.ps1" -Ok $ok -Experime
     pmt_config = [string] $training["PmtConfig"]
     pretrained = [string] $training["Pretrained"]
     gpu = [string] $training["Gpu"]
+    selected_gpu = $selectedGpu
     smoke_batches = $effectiveSmokeBatches
+    max_seconds = $effectiveMaxSeconds
     exit_code = $result.exit_code
     output = $result.output
 }

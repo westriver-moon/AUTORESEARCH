@@ -44,9 +44,10 @@ ensure_under_remote_root "${PROJECT_ROOT}"
 PMT_CONFIG="$(resolve_pmt_config "${CONFIG_PATH}")"
 require_dir "${PROJECT_ROOT}" "project root"
 require_executable "${PYTHON_BIN}" "python"
-require_file "${PMT_CONFIG}" "PMT config"
+require_file "${PMT_CONFIG}" "TVI-LFM config"
 require_file "${PRETRAIN}" "pretrained weights"
 command -v timeout >/dev/null 2>&1 || die "timeout is required for bounded autoresearch trials"
+GPU="$(resolve_gpu "${GPU}")"
 
 EXP_ROOT="$(experiment_root "${EXPERIMENT_ID}")"
 RESULTS_DIR="${EXP_ROOT}/results"
@@ -54,9 +55,11 @@ RUN_OUTPUT="${RESULTS_DIR}/trial"
 LOG_DIR="${RESULTS_DIR}/logs"
 LOG_FILE="${LOG_DIR}/trial.log"
 STATUS_FILE="${EXP_ROOT}/status.json"
+CONFIG_USED="${RESULTS_DIR}/config_used.yaml"
 mkdir -p "${LOG_DIR}" "${RUN_OUTPUT}"
+prepare_tvilfm_config "${PMT_CONFIG}" "${CONFIG_USED}" "${RUN_OUTPUT}" "${DATA_ROOT}" "${PRETRAIN}" "${GPU}"
 
-COMMAND_TEXT="CUDA_VISIBLE_DEVICES=${GPU} timeout --foreground ${MAX_SECONDS} ${PYTHON_BIN} -m pmt_sysu.train --config ${PMT_CONFIG} --data-root ${DATA_ROOT} --pretrained ${PRETRAIN} --output ${RUN_OUTPUT} --device cuda:0 --smoke-batches ${SMOKE_BATCHES}"
+COMMAND_TEXT="CUDA_VISIBLE_DEVICES=${GPU} timeout --foreground ${MAX_SECONDS} ${PYTHON_BIN} main.py --config_select ${CONFIG_USED}"
 
 if [[ "${DRY_RUN}" -eq 1 ]]; then
   write_status "${STATUS_FILE}" "dry_run" "autoresearch trial dry run; command was not executed" 0
@@ -68,13 +71,8 @@ set +e
 (
   cd "${PROJECT_ROOT}"
   export CUDA_VISIBLE_DEVICES="${GPU}"
-  timeout --foreground "${MAX_SECONDS}" "${PYTHON_BIN}" -m pmt_sysu.train \
-    --config "${PMT_CONFIG}" \
-    --data-root "${DATA_ROOT}" \
-    --pretrained "${PRETRAIN}" \
-    --output "${RUN_OUTPUT}" \
-    --device "cuda:0" \
-    --smoke-batches "${SMOKE_BATCHES}" \
+  timeout --foreground "${MAX_SECONDS}" "${PYTHON_BIN}" main.py \
+    --config_select "${CONFIG_USED}" \
     > "${LOG_FILE}" 2>&1
 )
 exit_code=$?

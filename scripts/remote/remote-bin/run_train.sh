@@ -39,9 +39,10 @@ ensure_under_remote_root "${PROJECT_ROOT}"
 PMT_CONFIG="$(resolve_pmt_config "${CONFIG_PATH}")"
 require_dir "${PROJECT_ROOT}" "project root"
 require_executable "${PYTHON_BIN}" "python"
-require_file "${PMT_CONFIG}" "PMT config"
+require_file "${PMT_CONFIG}" "TVI-LFM config"
 require_file "${PRETRAIN}" "pretrained weights"
 command -v tmux >/dev/null 2>&1 || die "tmux is required for full training"
+GPU="$(resolve_gpu "${GPU}")"
 
 EXP_ROOT="$(experiment_root "${EXPERIMENT_ID}")"
 RESULTS_DIR="${EXP_ROOT}/results"
@@ -51,7 +52,9 @@ LOG_FILE="${LOG_DIR}/train.log"
 STATUS_FILE="${EXP_ROOT}/status.json"
 SESSION_NAME="$(tmux_session_name "${EXPERIMENT_ID}")"
 WRAPPER="${EXP_ROOT}/train_wrapper.sh"
+CONFIG_USED="${RESULTS_DIR}/config_used.yaml"
 mkdir -p "${LOG_DIR}" "${RUN_OUTPUT}"
+prepare_tvilfm_config "${PMT_CONFIG}" "${CONFIG_USED}" "${RUN_OUTPUT}" "${DATA_ROOT}" "${PRETRAIN}" "${GPU}"
 
 COMMAND_TEXT="tmux new-session -d -s ${SESSION_NAME} ${WRAPPER}"
 
@@ -74,6 +77,7 @@ MODE="train"
 PROJECT_ROOT=$(shell_quote "${PROJECT_ROOT}")
 PYTHON_BIN=$(shell_quote "${PYTHON_BIN}")
 PMT_CONFIG=$(shell_quote "${PMT_CONFIG}")
+CONFIG_USED=$(shell_quote "${CONFIG_USED}")
 DATA_ROOT=$(shell_quote "${DATA_ROOT}")
 PRETRAIN=$(shell_quote "${PRETRAIN}")
 GPU=$(shell_quote "${GPU}")
@@ -82,18 +86,14 @@ RUN_OUTPUT=$(shell_quote "${RUN_OUTPUT}")
 LOG_FILE=$(shell_quote "${LOG_FILE}")
 STATUS_FILE=$(shell_quote "${STATUS_FILE}")
 SESSION_NAME=$(shell_quote "${SESSION_NAME}")
-COMMAND_TEXT=$(shell_quote "CUDA_VISIBLE_DEVICES=${GPU} ${PYTHON_BIN} -m pmt_sysu.train --config ${PMT_CONFIG} --data-root ${DATA_ROOT} --pretrained ${PRETRAIN} --output ${RUN_OUTPUT} --device cuda:0")
+COMMAND_TEXT=$(shell_quote "CUDA_VISIBLE_DEVICES=${GPU} ${PYTHON_BIN} main.py --config_select ${CONFIG_USED}")
 write_status "\${STATUS_FILE}" "running" "full training started in tmux" 0 >/dev/null
 set +e
 (
   cd "\${PROJECT_ROOT}"
   export CUDA_VISIBLE_DEVICES="\${GPU}"
-  "\${PYTHON_BIN}" -m pmt_sysu.train \\
-    --config "\${PMT_CONFIG}" \\
-    --data-root "\${DATA_ROOT}" \\
-    --pretrained "\${PRETRAIN}" \\
-    --output "\${RUN_OUTPUT}" \\
-    --device "cuda:0" \\
+  "\${PYTHON_BIN}" main.py \\
+    --config_select "\${CONFIG_USED}" \\
     > "\${LOG_FILE}" 2>&1
 )
 exit_code=\$?
@@ -110,4 +110,3 @@ chmod 700 "${WRAPPER}"
 
 tmux new-session -d -s "${SESSION_NAME}" "${WRAPPER}"
 write_status "${STATUS_FILE}" "submitted" "full training submitted to tmux" 0
-

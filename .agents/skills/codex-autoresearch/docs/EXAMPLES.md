@@ -35,7 +35,7 @@ Expected flow:
 
 ```text
 $codex-autoresearch
-Run a bounded PMT-SYSU trial loop. Use mAP as the metric, higher is better.
+Run a bounded TVI-LFM Stage A PMT_VIT trial loop. Use mAP as the metric, higher is better.
 Verify with scripts\remote\submit-autoresearch-trial.ps1 and fetch/check the
 trial result before deciding keep or discard.
 ```

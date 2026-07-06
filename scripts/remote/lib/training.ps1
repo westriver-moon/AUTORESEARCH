@@ -94,8 +94,8 @@ function Assert-TrainingGpu {
     )
 
     $effectiveGpu = [string] $Training["Gpu"]
-    if ((-not [string]::IsNullOrWhiteSpace($effectiveGpu)) -and ($effectiveGpu -notmatch '^[0-9,]+$')) {
-        throw "Gpu must contain only digits and commas: $effectiveGpu"
+    if ((-not [string]::IsNullOrWhiteSpace($effectiveGpu)) -and ($effectiveGpu -notmatch '^[0-9,]+$') -and ($effectiveGpu.ToLowerInvariant() -ne "auto")) {
+        throw "Gpu must be 'auto' or contain only digits and commas: $effectiveGpu"
     }
 }
 

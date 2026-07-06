@@ -72,6 +72,18 @@ $result = Invoke-RemoteSsh `
     -AllowFailure
 
 $ok = ($result.exit_code -eq 0)
+$remoteStatus = $null
+try {
+    if (-not [string]::IsNullOrWhiteSpace($result.output)) {
+        $remoteStatus = $result.output | ConvertFrom-Json -ErrorAction Stop
+    }
+} catch {
+    $remoteStatus = $null
+}
+$selectedGpu = ""
+if (($null -ne $remoteStatus) -and ($remoteStatus.PSObject.Properties.Name -contains "gpu")) {
+    $selectedGpu = [string] $remoteStatus.gpu
+}
 $status = New-StatusObject -ScriptName "submit-autoresearch-trial.ps1" -Ok $ok -ExperimentId $ExperimentId -Details @{
     remote_entry = $entry
     exit_code = $result.exit_code
@@ -82,6 +94,7 @@ $status = New-StatusObject -ScriptName "submit-autoresearch-trial.ps1" -Ok $ok -
     pmt_config = [string] $trial["PmtConfig"]
     pretrained = [string] $trial["Pretrained"]
     gpu = [string] $trial["Gpu"]
+    selected_gpu = $selectedGpu
     smoke_batches = $effectiveSmokeBatches
     max_seconds = $effectiveMaxSeconds
     dry_run = [bool] $DryRun

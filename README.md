@@ -106,9 +106,16 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\remote\submit-au
 ```
 
 Trial parameters live in `config/autoresearch-train.example.psd1`; copy that to
-`config/autoresearch-train.local.psd1` for machine-specific values. Full
-training still requires a separate explicit
+`config/autoresearch-train.local.psd1` for machine-specific values. The default
+remote target is the TVI-LFM Stage A PMT_VIT config, while the PMT-SYSU
+directory is used only as the pretrained ViT weight source. Full training still
+requires a separate explicit
 `scripts\remote\submit-job.ps1 -ConfirmFullTraining` command.
+
+Use `Gpu = 'auto'` in the local training config to let the fixed remote
+entrypoint pick an idle GPU with `nvidia-smi`. TVI-LFM metrics are normalized to
+`metrics.json` with `primary_metric`, `mAP`, `rank1`, and `mINP` for
+autoresearch comparison.
 
 Check the local adapter state with:
 

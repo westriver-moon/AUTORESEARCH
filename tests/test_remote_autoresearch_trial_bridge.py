@@ -47,11 +47,50 @@ class RemoteAutoresearchTrialBridgeTest(unittest.TestCase):
     def test_trial_parameter_config_is_karpathy_style_bounded(self) -> None:
         config = TRIAL_CONFIG.read_text(encoding="utf-8")
 
+        self.assertIn("RunTag = 'ar_tvilfm_pmtvit_stagea_trial'", config)
         self.assertIn("MetricName = 'mAP'", config)
         self.assertIn("Direction = 'higher'", config)
+        self.assertIn("TVI-LFM", config)
+        self.assertIn("pmt_vit_stage_a_pmt_recipe_288x144_768.yaml", config)
         self.assertIn("MaxSeconds = 300", config)
         self.assertIn("SmokeBatches = 1", config)
+        self.assertIn("Gpu = 'auto'", config)
         self.assertIn("AllowFullTraining = $false", config)
+
+    def test_remote_shell_default_config_matches_tvilfm_trial_target(self) -> None:
+        common = (PROJECT_ROOT / "scripts" / "remote" / "remote-bin" / "researchops_common.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("TVI-LFM", common)
+        self.assertIn("pmt_vit_stage_a_pmt_recipe_288x144_768.yaml", common)
+        self.assertNotIn("DEFAULT_PROJECT_ROOT=\"${PROJECT_ROOT:-${REMOTE_ROOT}/PMT-SYSU}\"", common)
+        self.assertNotIn("pmt_sysu/config", common)
+
+    def test_remote_shell_can_select_idle_gpu(self) -> None:
+        common = (PROJECT_ROOT / "scripts" / "remote" / "remote-bin" / "researchops_common.sh").read_text(
+            encoding="utf-8"
+        )
+        training_lib = TRAINING_LIB.read_text(encoding="utf-8")
+
+        self.assertIn("resolve_gpu", common)
+        self.assertIn("nvidia-smi", common)
+        self.assertIn("memory.used <= 1024 MiB", common)
+        self.assertIn("utilization.gpu <= 10%", common)
+        self.assertIn('($effectiveGpu.ToLowerInvariant() -ne "auto")', training_lib)
+
+    def test_remote_shell_writes_normalized_reid_metrics(self) -> None:
+        common = (PROJECT_ROOT / "scripts" / "remote" / "remote-bin" / "researchops_common.sh").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("reid-metrics-v1", common)
+        self.assertIn("primary_metric", common)
+        self.assertIn("primary_metric_source", common)
+        self.assertIn('"metric_name": "mAP"', common)
+        self.assertIn("rank1_percent", common)
+        self.assertIn("best_mAP", common)
+        self.assertIn("raw_block", common)
 
     def test_submit_trial_uses_fixed_remote_entry_and_not_full_training(self) -> None:
         script = SUBMIT_TRIAL.read_text(encoding="utf-8")
@@ -60,6 +99,7 @@ class RemoteAutoresearchTrialBridgeTest(unittest.TestCase):
         self.assertIn("Get-TrainingConfig", script)
         self.assertIn("--max-seconds", script)
         self.assertIn("--smoke-batches", script)
+        self.assertIn("selected_gpu", script)
         self.assertIn("DryRun", script)
         self.assertNotIn("RemoteTrainEntry", script)
         self.assertNotIn("ConfirmFullTraining", script)
@@ -89,8 +129,11 @@ class RemoteAutoresearchTrialBridgeTest(unittest.TestCase):
             self.assertIn(f'-Name "{arg_name}"', training_lib)
 
         self.assertIn("--smoke-batches", smoke)
+        self.assertIn("--max-seconds", smoke)
         self.assertIn("--confirm-full-training", full)
         self.assertIn("Full training requires -ConfirmFullTraining.", full)
+        self.assertIn("selected_gpu", smoke)
+        self.assertIn("selected_gpu", full)
 
     def test_check_job_not_found_remains_failure(self) -> None:
         local = CHECK_JOB.read_text(encoding="utf-8")
@@ -152,6 +195,10 @@ class RemoteAutoresearchTrialBridgeTest(unittest.TestCase):
         self.assertIn("experiment_id_regex_consistent", check_names)
         self.assertIn("trial_smoke_batches_upper_bound", check_names)
         self.assertIn("trial_max_seconds_upper_bound", check_names)
+        self.assertIn("autoresearch_trial_defaults_to_tvilfm_pmt_vit", check_names)
+        self.assertIn("autoresearch_trial_supports_auto_gpu", check_names)
+        self.assertIn("autoresearch_trial_writes_reid_metrics_json", check_names)
+        self.assertIn("remote_entrypoints_use_tvilfm_main", check_names)
         self.assertIn("sync_code_uses_path_boundary_check", check_names)
 
     def test_remote_trial_is_bounded_and_non_tmux(self) -> None:
@@ -160,10 +207,25 @@ class RemoteAutoresearchTrialBridgeTest(unittest.TestCase):
         self.assertIn("SCRIPT_NAME=\"run_autoresearch_trial.sh\"", script)
         self.assertIn("MODE=\"trial\"", script)
         self.assertIn("timeout --foreground", script)
+        self.assertIn("main.py", script)
+        self.assertIn("--config_select", script)
         self.assertIn("--smoke-batches", script)
+        self.assertIn("resolve_gpu", script)
         self.assertIn("write_last_metric", script)
+        self.assertNotIn("pmt_sysu.train", script)
         self.assertNotIn("tmux new-session", script)
         self.assertNotIn("--confirm-full-training", script)
+
+    def test_remote_smoke_and_train_use_tvilfm_main(self) -> None:
+        for path in (
+            PROJECT_ROOT / "scripts" / "remote" / "remote-bin" / "run_smoke_test.sh",
+            PROJECT_ROOT / "scripts" / "remote" / "remote-bin" / "run_train.sh",
+        ):
+            script = path.read_text(encoding="utf-8")
+            self.assertIn("main.py", script)
+            self.assertIn("--config_select", script)
+            self.assertIn("prepare_tvilfm_config", script)
+            self.assertNotIn("pmt_sysu.train", script)
 
     def test_remote_bin_deploy_is_fixed_to_project_entrypoints(self) -> None:
         script = DEPLOY_REMOTE_BIN.read_text(encoding="utf-8")

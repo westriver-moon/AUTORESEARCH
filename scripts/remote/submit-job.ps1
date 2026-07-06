@@ -60,6 +60,18 @@ $result = Invoke-RemoteSsh `
     -AllowFailure
 
 $ok = ($result.exit_code -eq 0)
+$remoteStatus = $null
+try {
+    if (-not [string]::IsNullOrWhiteSpace($result.output)) {
+        $remoteStatus = $result.output | ConvertFrom-Json -ErrorAction Stop
+    }
+} catch {
+    $remoteStatus = $null
+}
+$selectedGpu = ""
+if (($null -ne $remoteStatus) -and ($remoteStatus.PSObject.Properties.Name -contains "gpu")) {
+    $selectedGpu = [string] $remoteStatus.gpu
+}
 $status = New-StatusObject -ScriptName "submit-job.ps1" -Ok $ok -ExperimentId $ExperimentId -Details @{
     remote_entry = $entry
     remote_config = [string] $training["PmtConfig"]
@@ -69,6 +81,7 @@ $status = New-StatusObject -ScriptName "submit-job.ps1" -Ok $ok -ExperimentId $E
     pmt_config = [string] $training["PmtConfig"]
     pretrained = [string] $training["Pretrained"]
     gpu = [string] $training["Gpu"]
+    selected_gpu = $selectedGpu
     exit_code = $result.exit_code
     output = $result.output
 }
