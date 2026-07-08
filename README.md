@@ -39,6 +39,10 @@ scripts/remote/sync-code.ps1
 `submit-job.ps1 -ConfirmFullTraining` remains the explicit boundary for full
 training.
 
+`config/autoresearch-train.example.psd1` now defaults to the current Stage A
+main config and supports an optional local YAML mirror for epoch inspection
+before a human-confirmed remote training launch.
+
 ## v2 Inputs
 
 ```text

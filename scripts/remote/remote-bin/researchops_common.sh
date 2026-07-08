@@ -6,7 +6,7 @@ DEFAULT_PROJECT_ROOT="${PROJECT_ROOT:-${REMOTE_ROOT}/TVI-LFM}"
 DEFAULT_PROJECT_PARENT="${DEFAULT_PROJECT_ROOT%/*}"
 DEFAULT_PYTHON_BIN="${PYTHON_BIN:-/opt/conda/envs/tvi-lfm/bin/python}"
 DEFAULT_DATA_ROOT="${DATA_ROOT:-/data/SYSU-MM01}"
-DEFAULT_PMT_CONFIG="${PMT_CONFIG:-${DEFAULT_PROJECT_ROOT}/config/stage_a/pmt_vit_stage_a_pmt_recipe_288x144_768.yaml}"
+DEFAULT_PMT_CONFIG="${PMT_CONFIG:-${DEFAULT_PROJECT_ROOT}/config/stage_a/pmt_vit_stage_a_current_best.yaml}"
 DEFAULT_PRETRAIN="${PRETRAIN:-${DEFAULT_PROJECT_PARENT}/PMT-SYSU/pretrained/jx_vit_base_p16_224-80ecf9dd.pth}"
 DEFAULT_GPU="${GPU:-0}"
 SCRIPT_NAME="${SCRIPT_NAME:-$(basename "$0")}"
@@ -141,6 +141,48 @@ data["gpu_id"] = "0"
 
 with open(config_out, "w", encoding="utf-8") as f:
     yaml.safe_dump(data, f, sort_keys=False, allow_unicode=True)
+PY
+}
+
+read_total_train_epoch() {
+  local config_path="$1"
+  require_file "${config_path}" "training config"
+  CONFIG_PATH="${config_path}" "${PYTHON_BIN}" - <<'PY'
+import os
+import sys
+import yaml
+
+config_path = os.environ["CONFIG_PATH"]
+with open(config_path, "r", encoding="utf-8") as f:
+    data = yaml.load(f, Loader=yaml.FullLoader) or {}
+
+if not isinstance(data, dict):
+    print(f"training config must be a YAML mapping: {config_path}", file=sys.stderr)
+    raise SystemExit(3)
+
+value = data.get("total_train_epoch")
+if value is None:
+    print(f"total_train_epoch is missing from training YAML: {config_path}", file=sys.stderr)
+    raise SystemExit(3)
+
+if isinstance(value, bool):
+    print(f"total_train_epoch must be a positive integer: {value!r}", file=sys.stderr)
+    raise SystemExit(3)
+
+try:
+    epoch = int(value)
+except (TypeError, ValueError):
+    print(f"total_train_epoch must be a positive integer: {value!r}", file=sys.stderr)
+    raise SystemExit(3)
+
+if str(value).strip() != str(epoch) and not isinstance(value, int):
+    print(f"total_train_epoch must be a positive integer: {value!r}", file=sys.stderr)
+    raise SystemExit(3)
+if epoch < 1:
+    print(f"total_train_epoch must be at least 1: {epoch}", file=sys.stderr)
+    raise SystemExit(3)
+
+print(epoch)
 PY
 }
 

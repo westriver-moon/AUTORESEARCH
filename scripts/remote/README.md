@@ -21,6 +21,9 @@ smoke-autoresearch-v2.ps1
 `autoresearch-v2.ps1` is the only supported autonomous autoresearch runtime in
 this repository.
 
+`config/autoresearch-train.example.psd1` defaults manual training helpers to
+the current Stage A main config and allows optional local epoch inspection.
+
 ## Manual Operations
 
 ```text
