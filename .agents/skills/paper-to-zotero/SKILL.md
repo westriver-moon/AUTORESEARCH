@@ -21,7 +21,7 @@ Do not reimplement paper retrieval or Zotero writes in the Skill. The script is 
 - Add `--yes` only when the user clearly authorizes writing to Zotero.
 - Add `--open` only when the user asks to open/read after import.
 - Do not use Zotero Web API credentials. This project writes only through local Zotero Desktop.
-- Do not call SSH, GPU training, or `$codex-autoresearch`.
+- Do not call SSH, GPU training, or `$codex-autoresearch-v2`.
 - Do not use `--force-duplicate` unless the user explicitly asks for duplicates.
 
 ## Target Collections

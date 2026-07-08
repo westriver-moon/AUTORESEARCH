@@ -1,110 +1,75 @@
 # Remote Script Contract
 
-This directory is the only supported interface between research automation and
-the remote GPU host.
+This directory exposes the supported local entrypoints for server-side research
+automation.
 
-The remote workspace root is configured by `config/remote.local.psd1`.
-Automation is allowed to create and manage files under that root through the
-fixed entrypoints below. The deployed remote shell scripts live in
-`<remote-workspace-root>/bin`, and their local source copies are kept in
-`scripts/remote/remote-bin`.
-
-## Entry points
+## v2 Runtime
 
 ```text
-doctor.ps1               Read-only health check.
-ensure-connectivity.ps1  Starts the local tunnel helper when needed, then checks SSH and proxy status.
-deploy-remote-bin.ps1    Deploys fixed remote shell entrypoints to <remote-workspace-root>/bin.
-sync-code.ps1            Copies a local project path into the remote experiment workspace.
-submit-autoresearch-trial.ps1
-                         Runs a bounded Karpathy-style trial verify command.
-submit-smoke-test.ps1    Runs the fixed remote smoke-test entrypoint.
-submit-job.ps1           Runs the fixed remote full-training entrypoint only with explicit confirmation.
-check-job.ps1            Runs the fixed remote status entrypoint.
-fetch-results.ps1        Fetches approved result files from the remote experiment directory.
-cancel-own-job.ps1       Cancels only the job associated with the given experiment id.
+autoresearch-v2.ps1
+  Remote-first controller for:
+  deploy, doctor, bootstrap, inspect, apply, baseline, run, resume,
+  status, collect, stop, sync-best
+
+guard-autoresearch-mode.ps1
+  Checks invoke/develop mode boundaries for sealed autoresearch v2 files.
+
+smoke-autoresearch-v2.ps1
+  Real-server, non-GPU smoke workflow using the actual git root layout.
 ```
 
-## Required parameters
+`autoresearch-v2.ps1` is the only supported autonomous autoresearch runtime in
+this repository.
 
-All experiment-scoped scripts accept:
+`config/autoresearch-train.example.psd1` defaults manual training helpers to
+the current Stage A main config and allows optional local epoch inspection.
 
-```powershell
--ExperimentId <id>
--Json
--RemoteHost <ssh-alias>
--SshConfigPath <path>
-```
-
-`ExperimentId` must match:
+## Manual Operations
 
 ```text
-^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$
+doctor.ps1               Read-only SSH / proxy / remote-entry health check.
+ensure-connectivity.ps1  Starts the local tunnel helper when needed.
+submit-smoke-test.ps1    Fixed remote smoke / preflight entrypoint.
+submit-job.ps1           Human-confirmed full training entrypoint.
+submit-sampling-mining-ablation.ps1
+                         Manual sampling/mining ablation control wrapper.
+submit-mbpatch-light-ablation.ps1
+                         Manual mbpatch-light ablation control wrapper.
+check-job.ps1            Reads fixed remote status for manual jobs.
+fetch-results.ps1        Fetches approved result files for manual jobs.
+cancel-own-job.ps1       Cancels only the job matching the experiment id.
+sync-code.ps1            Copies a local project path into the remote workspace.
 ```
 
-## Output
-
-Each script writes a JSON status document to:
+## Runtime Files
 
 ```text
-experiments/<experiment-id>/remote/
+lib/common.ps1
+lib/ssh.ps1
+lib/result.ps1
+lib/training.ps1
+lib/autoresearch_v2.ps1
+
+remote-bin/autoresearch_v2_driver.py
+remote-bin/autoresearch_v2_common.py
+remote-bin/autoresearch_v2_gpu_lease.py
+remote-bin/autoresearch_v2_metric_tvilfm.py
+remote-bin/autoresearch_v2_mode_guard.py
+remote-bin/run_autoresearch_v2_bridge.sh
+remote-bin/run_sampling_mining_ablation_bridge.sh
+remote-bin/run_mbpatch_light_ablation_bridge.sh
 ```
 
-`doctor.ps1` writes no experiment file unless `-ExperimentId` is supplied.
+## Mode Boundary
 
-Remote experiment files are expected under:
+Use `$codex-autoresearch-v2` for invocation-only work. Use
+`$codex-autoresearch-v2-dev` for implementation changes. The authoritative
+policy is `.codex/research-policy.json`.
 
-```text
-<remote-workspace-root>/experiments/<experiment-id>/
-```
+## Remote Layout Assumption
 
-## Prohibited behavior
+The default v2 target assumes:
 
-- Do not call arbitrary SSH commands from research automation.
-- Do not use the tunnel-only SSH alias for experiment work.
-- Do not read SSH private key contents.
-- Destructive deletion needs a dedicated confirmed entrypoint.
-- Do not run full training without `submit-job.ps1 -ConfirmFullTraining`.
-
-## Autoresearch Trial
-
-`submit-autoresearch-trial.ps1` is the only remote GPU entrypoint intended for
-the `$codex-autoresearch` loop. It runs `run_autoresearch_trial.sh` against the
-TVI-LFM Stage A `PMT_VIT` training path with a bounded timeout, then writes
-status under `experiments/<experiment-id>/remote/`.
-
-The default training target is the TVI-LFM PMT recipe config:
-
-```text
-TVI-LFM/config/stage_a/pmt_vit_stage_a_pmt_recipe_288x144_768.yaml
-```
-
-`SmokeBatches` is retained as a compatibility field for the local automation
-contract. TVI-LFM does not expose a batch-count smoke flag, so the effective
-runtime boundary for trial and smoke entrypoints is `MaxSeconds`.
-
-Deploy local remote entrypoints before using a newly added or changed script:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\remote\deploy-remote-bin.ps1 -Json
-```
-
-Training parameters can be supplied through
-`config/autoresearch-train.local.psd1` or command-line overrides such as
-`-Gpu`, `-MaxSeconds`, `-SmokeBatches`, and `-RemoteConfigPath`.
-
-Set `Gpu = 'auto'` to let the fixed remote entrypoint choose an idle GPU with
-`nvidia-smi` before launching. A GPU is considered idle when
-`memory.used <= 1024 MiB` and `utilization.gpu <= 10%`; if no GPU matches, the
-entrypoint fails instead of starting work on a busy card.
-
-For TVI-LFM runs, the entrypoint writes a normalized ReID metric file to:
-
-```text
-<remote-workspace-root>/experiments/<experiment-id>/results/metrics.json
-```
-
-The JSON includes `primary_metric`, `mAP`, `rank1`, `mINP`, percent-scaled
-copies, and the raw metric block. `primary_metric` uses `best_mAP` when present
-and otherwise falls back to the last parsed `mAP`. The autoresearch loop should
-use `primary_metric` or `mAP` with `Direction = 'higher'`.
+- remote git root: `/home/cgv841/ybj`
+- active training code: `TVI-LFM/`
+- remote controller root: `/home/cgv841/ybj/autoresearch-v2`

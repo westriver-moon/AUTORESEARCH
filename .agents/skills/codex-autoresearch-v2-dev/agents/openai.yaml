@@ -1,0 +1,8 @@
+interface:
+  display_name: "Codex Autoresearch v2 Dev"
+  short_description: "Develop and package autoresearch v2"
+  brand_color: "#155E75"
+  default_prompt: "Use $codex-autoresearch-v2-dev to change, validate, or package the autoresearch v2 skill and runtime."
+
+policy:
+  allow_implicit_invocation: false

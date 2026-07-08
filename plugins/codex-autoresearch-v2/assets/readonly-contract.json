@@ -1,0 +1,13 @@
+{
+  "schema_version": "autoresearch-v2-package-contract",
+  "name": "codex-autoresearch-v2",
+  "version": "0.1.0",
+  "mode": "invoke",
+  "runtime_entrypoint": "scripts/remote/autoresearch-v2.ps1",
+  "guard_entrypoint": "scripts/remote/guard-autoresearch-mode.ps1",
+  "sealed_paths": [
+    "skills/codex-autoresearch-v2/**",
+    "scripts/remote/**"
+  ],
+  "development_skill": "codex-autoresearch-v2-dev"
+}

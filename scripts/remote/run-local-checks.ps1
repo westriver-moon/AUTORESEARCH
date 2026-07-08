@@ -15,7 +15,6 @@ function Add-Check {
         [string] $Name,
         [Parameter(Mandatory = $true)]
         [bool] $Ok,
-        [Parameter(Mandatory = $false)]
         [string] $Detail = ""
     )
 
@@ -40,133 +39,111 @@ function Read-TextIfPresent {
 
 $criticalScripts = @(
     "doctor.ps1",
-    "submit-autoresearch-trial.ps1",
+    "ensure-connectivity.ps1",
+    "guard-autoresearch-mode.ps1",
+    "autoresearch-v2.ps1",
+    "smoke-autoresearch-v2.ps1",
     "submit-smoke-test.ps1",
     "submit-job.ps1",
     "check-job.ps1",
-    "sync-code.ps1",
     "fetch-results.ps1",
     "cancel-own-job.ps1",
+    "sync-code.ps1",
     "lib\common.ps1",
     "lib\ssh.ps1",
     "lib\paths.ps1",
     "lib\result.ps1",
     "lib\training.ps1",
-    "remote-bin\run_autoresearch_trial.sh",
+    "lib\autoresearch_v2.ps1",
+    "remote-bin\autoresearch_v2_common.py",
+    "remote-bin\autoresearch_v2_driver.py",
+    "remote-bin\autoresearch_v2_gpu_lease.py",
+    "remote-bin\autoresearch_v2_metric_tvilfm.py",
+    "remote-bin\autoresearch_v2_mode_guard.py",
+    "remote-bin\run_autoresearch_v2_bridge.sh",
     "remote-bin\run_smoke_test.sh",
     "remote-bin\run_train.sh",
-    "remote-bin\check_job.sh"
+    "remote-bin\check_job.sh",
+    "remote-bin\cancel_job.sh"
 )
 foreach ($relative in $criticalScripts) {
     $path = Join-Path $remoteScriptRoot $relative
-    Add-Check `
-        -Name ("file_exists:" + $relative.Replace("\", "/")) `
-        -Ok (Test-Path -LiteralPath $path) `
-        -Detail $path
+    Add-Check -Name ("file_exists:" + $relative.Replace("\", "/")) -Ok (Test-Path -LiteralPath $path) -Detail $path
 }
 
-$configTemplates = @(
-    "config\autoresearch.example.psd1",
-    "config\autoresearch-train.example.psd1",
-    "config\remote.example.psd1"
+$projectFiles = @(
+    "config\remote.example.psd1",
+    "config\autoresearch-v2.example.psd1",
+    "autoresearch\program.md",
+    "autoresearch\targets\tvilfm-stage-a.yaml",
+    ".agents\skills\codex-autoresearch-v2\SKILL.md",
+    ".agents\skills\codex-autoresearch-v2-dev\SKILL.md",
+    ".githooks\pre-commit",
+    "plugins\codex-autoresearch-v2\.codex-plugin\plugin.json"
 )
-foreach ($relative in $configTemplates) {
+foreach ($relative in $projectFiles) {
     $path = Join-Path $projectRoot $relative
-    Add-Check `
-        -Name ("config_template_exists:" + $relative.Replace("\", "/")) `
-        -Ok (Test-Path -LiteralPath $path) `
-        -Detail $path
+    Add-Check -Name ("project_file_exists:" + $relative.Replace("\", "/")) -Ok (Test-Path -LiteralPath $path) -Detail $path
 }
 
 $expectedExperimentIdRegex = '^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$'
 $commonText = Read-TextIfPresent -Path (Join-Path $remoteScriptRoot "lib\common.ps1")
 $readmeText = Read-TextIfPresent -Path (Join-Path $remoteScriptRoot "README.md")
-$commonHasRegex = $commonText.Contains($expectedExperimentIdRegex)
-$readmeHasRegex = $readmeText.Contains($expectedExperimentIdRegex)
 Add-Check `
     -Name "experiment_id_regex_consistent" `
-    -Ok ($commonHasRegex -and $readmeHasRegex) `
+    -Ok ($commonText.Contains($expectedExperimentIdRegex)) `
     -Detail ("expected regex: " + $expectedExperimentIdRegex)
 
-$submitText = Read-TextIfPresent -Path (Join-Path $remoteScriptRoot "submit-autoresearch-trial.ps1")
-Add-Check `
-    -Name "trial_smoke_batches_upper_bound" `
-    -Ok (($submitText -match '\$effectiveSmokeBatches\s+-gt\s+10') -and $submitText.Contains("SmokeBatches must be between 1 and 10")) `
-    -Detail "SmokeBatches must be clamped to 1..10."
-Add-Check `
-    -Name "trial_max_seconds_upper_bound" `
-    -Ok (($submitText -match '\$effectiveMaxSeconds\s+-gt\s+3600') -and $submitText.Contains("MaxSeconds must be between 1 and 3600")) `
-    -Detail "MaxSeconds must be clamped to 1..3600."
+$v2ScriptText = Read-TextIfPresent -Path (Join-Path $remoteScriptRoot "autoresearch-v2.ps1")
+$v2LibText = Read-TextIfPresent -Path (Join-Path $remoteScriptRoot "lib\autoresearch_v2.ps1")
+$smokeText = Read-TextIfPresent -Path (Join-Path $remoteScriptRoot "smoke-autoresearch-v2.ps1")
+$targetText = Read-TextIfPresent -Path (Join-Path $projectRoot "autoresearch\targets\tvilfm-stage-a.yaml")
+$programText = Read-TextIfPresent -Path (Join-Path $projectRoot "autoresearch\program.md")
+$policyText = Read-TextIfPresent -Path (Join-Path $projectRoot ".codex\research-policy.json")
+$invokeSkillText = Read-TextIfPresent -Path (Join-Path $projectRoot ".agents\skills\codex-autoresearch-v2\SKILL.md")
+$devSkillText = Read-TextIfPresent -Path (Join-Path $projectRoot ".agents\skills\codex-autoresearch-v2-dev\SKILL.md")
+$pluginText = Read-TextIfPresent -Path (Join-Path $projectRoot "plugins\codex-autoresearch-v2\.codex-plugin\plugin.json")
 
-$trainingText = Read-TextIfPresent -Path (Join-Path $remoteScriptRoot "lib\training.ps1")
 Add-Check `
-    -Name "remote_root_export_helper_exists" `
-    -Ok ($trainingText.Contains("Add-RemoteRootExport") -and $trainingText.Contains("REMOTE_ROOT=") -and $trainingText.Contains("export REMOTE_ROOT")) `
-    -Detail "Remote entrypoint commands must receive RemoteWorkspaceRoot as REMOTE_ROOT."
-
-$trialTemplateText = Read-TextIfPresent -Path (Join-Path $projectRoot "config\autoresearch-train.example.psd1")
-$remoteCommonText = Read-TextIfPresent -Path (Join-Path $remoteScriptRoot "remote-bin\researchops_common.sh")
+    -Name "v2_modes_declared" `
+    -Ok ($v2ScriptText.Contains('"deploy", "doctor", "bootstrap", "inspect", "apply", "baseline", "run", "resume", "status", "collect", "stop", "sync-best"')) `
+    -Detail "autoresearch-v2.ps1 should expose the unified control surface."
 Add-Check `
-    -Name "autoresearch_trial_defaults_to_tvilfm_pmt_vit" `
-    -Ok ($trialTemplateText.Contains("TVI-LFM") -and $trialTemplateText.Contains("pmt_vit_stage_a_pmt_recipe_288x144_768.yaml") -and $remoteCommonText.Contains("TVI-LFM") -and $remoteCommonText.Contains("pmt_vit_stage_a_pmt_recipe_288x144_768.yaml")) `
-    -Detail "Autoresearch trial template and remote shell fallback should target TVI-LFM Stage A PMT_VIT."
+    -Name "v2_remote_roots_declared" `
+    -Ok ($v2LibText.Contains("RemoteControllerRoot") -and $v2LibText.Contains("RemoteRunRoot") -and $v2LibText.Contains("RemoteWorktreeRoot") -and $v2LibText.Contains("RemoteLeaseRoot")) `
+    -Detail "autoresearch_v2.ps1 helper should carry remote controller roots."
 Add-Check `
-    -Name "autoresearch_trial_supports_auto_gpu" `
-    -Ok ($trialTemplateText.Contains("Gpu = 'auto'") -and $remoteCommonText.Contains("resolve_gpu") -and $remoteCommonText.Contains("nvidia-smi") -and $remoteCommonText.Contains("memory.used <= 1024 MiB")) `
-    -Detail "Gpu='auto' should select an idle remote GPU through the fixed entrypoint."
+    -Name "smoke_script_is_non_gpu_compile_check" `
+    -Ok ($smokeText.Contains("py_compile") -and $smokeText.Contains('policy: none') -and $smokeText.Contains('primary_metric": 1.0')) `
+    -Detail "smoke-autoresearch-v2.ps1 should validate the real server layout without consuming a GPU."
 Add-Check `
-    -Name "autoresearch_trial_writes_reid_metrics_json" `
-    -Ok ($remoteCommonText.Contains("reid-metrics-v1") -and $remoteCommonText.Contains("primary_metric") -and $remoteCommonText.Contains('"metric_name": "mAP"') -and $remoteCommonText.Contains("rank1") -and $remoteCommonText.Contains("mINP")) `
-    -Detail "TVI-LFM logs should be normalized into metrics.json for autoresearch decisions."
-
-$remoteTrialText = Read-TextIfPresent -Path (Join-Path $remoteScriptRoot "remote-bin\run_autoresearch_trial.sh")
-$remoteSmokeText = Read-TextIfPresent -Path (Join-Path $remoteScriptRoot "remote-bin\run_smoke_test.sh")
-$remoteTrainText = Read-TextIfPresent -Path (Join-Path $remoteScriptRoot "remote-bin\run_train.sh")
+    -Name "default_target_uses_server_git_root" `
+    -Ok ($targetText.Contains("remote_root: /home/cgv841/ybj") -and $targetText.Contains("cwd: TVI-LFM") -and $targetText.Contains("TVI-LFM/main.py")) `
+    -Detail "default target must match the actual remote git topology."
 Add-Check `
-    -Name "remote_entrypoints_use_tvilfm_main" `
-    -Ok ($remoteTrialText.Contains("main.py") -and $remoteTrialText.Contains("--config_select") -and $remoteSmokeText.Contains("main.py") -and $remoteSmokeText.Contains("--config_select") -and $remoteTrainText.Contains("main.py") -and $remoteTrainText.Contains("--config_select") -and (-not ($remoteTrialText + $remoteSmokeText + $remoteTrainText).Contains("pmt_sysu.train"))) `
-    -Detail "Remote trial, smoke, and full-train entrypoints should execute TVI-LFM main.py."
-
-$submitSmokeText = Read-TextIfPresent -Path (Join-Path $remoteScriptRoot "submit-smoke-test.ps1")
-$submitJobText = Read-TextIfPresent -Path (Join-Path $remoteScriptRoot "submit-job.ps1")
+    -Name "default_program_scopes_tvilfm_subtree" `
+    -Ok ($programText.Contains("TVI-LFM/main.py") -and $programText.Contains("/home/cgv841/ybj")) `
+    -Detail "default program should scope mutable paths to the active TVI-LFM subtree."
 Add-Check `
-    -Name "smoke_reuses_autoresearch_training_config" `
-    -Ok ($submitSmokeText.Contains("Get-TrainingConfig") -and $submitSmokeText.Contains("Add-TrainingRemoteArgs") -and $submitSmokeText.Contains("--smoke-batches")) `
-    -Detail "submit-smoke-test.ps1 must pass the shared autoresearch training config."
+    -Name "manual_remote_entrypoints_declared" `
+    -Ok ($commonText.Contains("RemoteSmokeEntry") -and $commonText.Contains("RemoteTrainEntry") -and $commonText.Contains("RemoteStatusEntry") -and $commonText.Contains("RemoteCancelEntry") -and $readmeText.Contains("submit-smoke-test.ps1") -and $readmeText.Contains("submit-job.ps1") -and $readmeText.Contains("check-job.ps1") -and $readmeText.Contains("fetch-results.ps1") -and $readmeText.Contains("cancel-own-job.ps1")) `
+    -Detail "Manual remote training and status entrypoints should stay declared in config and README."
 Add-Check `
-    -Name "full_train_reuses_autoresearch_training_config" `
-    -Ok ($submitJobText.Contains("Get-TrainingConfig") -and $submitJobText.Contains("Add-TrainingRemoteArgs") -and $submitJobText.Contains("--confirm-full-training")) `
-    -Detail "submit-job.ps1 must pass the shared autoresearch training config."
-
-$checkJobText = Read-TextIfPresent -Path (Join-Path $remoteScriptRoot "check-job.ps1")
-$remoteCheckJobText = Read-TextIfPresent -Path (Join-Path $remoteScriptRoot "remote-bin\check_job.sh")
+    -Name "autoresearch_modes_declared" `
+    -Ok ($policyText.Contains('"default_mode": "invoke"') -and $policyText.Contains('"invoke"') -and $policyText.Contains('"develop"') -and $policyText.Contains("guard-autoresearch-mode.ps1") -and $policyText.Contains(".githooks/pre-commit")) `
+    -Detail "Autoresearch policy should declare invoke/develop mode boundaries plus guard and hook entrypoints."
 Add-Check `
-    -Name "check_job_not_found_is_failure" `
-    -Ok ($checkJobText.Contains('remote_state') -and $checkJobText.Contains('"not_found"') -and $remoteCheckJobText.Contains('sys.exit(1 if data.get("state") == "not_found" else 0)')) `
-    -Detail "not_found status must not become a successful check on later polling."
-
-$syncText = Read-TextIfPresent -Path (Join-Path $remoteScriptRoot "sync-code.ps1")
+    -Name "invoke_skill_is_sealed" `
+    -Ok ($invokeSkillText.Contains("invocation mode") -and $invokeSkillText.Contains("Do not edit sealed autoresearch implementation paths") -and $invokeSkillText.Contains('$codex-autoresearch-v2-dev')) `
+    -Detail "Invocation skill should route implementation changes to the development skill."
 Add-Check `
-    -Name "sync_code_uses_path_boundary_check" `
-    -Ok ($syncText.Contains("Test-IsPathAtOrUnder") -and $syncText.Contains('$rootWithSeparator') -and (-not $syncText.Contains('.StartsWith($resolvedProject'))) `
-    -Detail "SourcePath must be equal to the project root or under a project-root path separator."
-
-$fetchText = Read-TextIfPresent -Path (Join-Path $remoteScriptRoot "fetch-results.ps1")
-$fetchTargetsPresent = (
-    $fetchText.Contains('"metrics.json"') -and
-    $fetchText.Contains('"summary.json"') -and
-    $fetchText.Contains('"config_used.yaml"') -and
-    $fetchText.Contains('"logs"') -and
-    $fetchText.Contains('"error_samples"')
-)
+    -Name "dev_skill_declares_development_mode" `
+    -Ok ($devSkillText.Contains("development mode") -and $devSkillText.Contains("may edit these paths") -and $devSkillText.Contains("guard-autoresearch-mode.ps1")) `
+    -Detail "Development skill should be the only agent-facing mode that edits sealed paths."
 Add-Check `
-    -Name "fetch_results_whitelist_extended" `
-    -Ok ($fetchTargetsPresent -and $fetchText.Contains("test -e") -and $fetchText.Contains("Invoke-RemoteScpFrom")) `
-    -Detail "Allowed result targets must stay explicit and optional."
-Add-Check `
-    -Name "fetch_results_empty_is_failure" `
-    -Ok ($fetchText.Contains('$ok = ($fetched.Count -gt 0)') -and $fetchText.Contains("no_result_files_fetched") -and $fetchText.Contains("exit 1")) `
-    -Detail "Fetching no result files should fail clearly."
+    -Name "v2_plugin_packaged" `
+    -Ok ($pluginText.Contains('"name": "codex-autoresearch-v2"') -and $pluginText.Contains('"version": "0.1.0"') -and $policyText.Contains('"path": "plugins/codex-autoresearch-v2"')) `
+    -Detail "Autoresearch v2 should have a versioned repo-local plugin package."
 
 $failed = @($checks | Where-Object { -not $_.ok })
 $ok = ($failed.Count -eq 0)

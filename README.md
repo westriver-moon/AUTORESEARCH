@@ -1,128 +1,116 @@
 # Research Remote Operations
 
-This project keeps remote GPU operations behind fixed PowerShell entrypoints.
-The tracked files are safe templates; machine-specific host aliases, remote
-user paths, SSH settings, and API keys should live only in ignored local config
-files.
+This repository now treats `scripts/remote/autoresearch-v2.ps1` as the primary
+autoresearch runtime.
 
-- Windows PowerShell 5.1 on the local workstation.
-- OpenSSH from `C:\Windows\System32\OpenSSH`.
-- SSH host alias configured in `config/remote.local.psd1`.
-- Optional tunnel alias configured in `config/remote.local.psd1`.
-- Remote research root configured in `config/remote.local.psd1`.
-
-## Layout
+## Primary Entry Points
 
 ```text
-scripts/remote/
-  README.md
-  doctor.ps1
-  ensure-connectivity.ps1
-  deploy-remote-bin.ps1
-  sync-code.ps1
-  submit-autoresearch-trial.ps1
-  submit-smoke-test.ps1
-  submit-job.ps1
-  check-job.ps1
-  fetch-results.ps1
-  cancel-own-job.ps1
-  lib/
-    common.ps1
-    ssh.ps1
-    paths.ps1
-    result.ps1
-  bootstrap/
-    verify-local-tunnel-prereqs.ps1
-    verify-remote-proxy-prereqs.ps1
-  remote-bin/
-    researchops_common.sh
-    run_autoresearch_trial.sh
-    run_smoke_test.sh
-    run_train.sh
-    check_job.sh
-    cancel_job.sh
+scripts/remote/autoresearch-v2.ps1
+  Remote-first controller for deploy / doctor / bootstrap / inspect / apply /
+  baseline / run / resume / status / collect / stop / sync-best.
 
-config/
-  autoresearch.example.psd1
-  autoresearch-train.example.psd1
-  remote.example.psd1
+scripts/remote/smoke-autoresearch-v2.ps1
+  Non-GPU smoke workflow against the real server git layout.
+
+scripts/remote/doctor.ps1
+  Read-only SSH / proxy / fixed-entry health check for the remote host.
+
+scripts/remote/ensure-connectivity.ps1
+  Starts the local tunnel helper when needed, then checks SSH and proxy status.
 ```
 
-## First checks
+## Manual Utilities
 
-Run the read-only health check:
+The following scripts remain for manual preflight or human-confirmed training
+outside the autonomous loop:
+
+```text
+scripts/remote/submit-smoke-test.ps1
+scripts/remote/submit-job.ps1
+scripts/remote/submit-sampling-mining-ablation.ps1
+scripts/remote/submit-mbpatch-light-ablation.ps1
+scripts/remote/check-job.ps1
+scripts/remote/fetch-results.ps1
+scripts/remote/cancel-own-job.ps1
+scripts/remote/sync-code.ps1
+```
+
+`submit-job.ps1 -ConfirmFullTraining` remains the explicit boundary for full
+training.
+
+`config/autoresearch-train.example.psd1` now defaults to the current Stage A
+main config and supports an optional local YAML mirror for epoch inspection
+before a human-confirmed remote training launch.
+
+## v2 Inputs
+
+```text
+autoresearch/program.md
+autoresearch/targets/*.yaml
+config/autoresearch-v2.example.psd1
+config/remote.local.psd1
+```
+
+The default Stage A target assumes:
+
+- remote git root: `/home/cgv841/ybj`
+- active training subproject: `TVI-LFM/`
+- remote controller root: `/home/cgv841/ybj/autoresearch-v2`
+
+## Skill State
+
+The active project-local invocation skill is:
+
+```text
+.agents/skills/codex-autoresearch-v2/
+```
+
+Development of the skill/runtime uses a separate skill:
+
+```text
+.agents/skills/codex-autoresearch-v2-dev/
+```
+
+Invocation mode treats the v2 skill, runtime, guard, and package as sealed
+implementation code. Check that boundary with:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/remote/doctor.ps1 -Json
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\remote\guard-autoresearch-mode.ps1 -Mode invoke -FromGit -Json
 ```
 
-Make sure the proxy tunnel is alive, then verify SSH and remote proxy status:
+The repo pre-commit hook uses the same guard. Invocation mode is the default;
+implementation commits should opt into development mode:
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/remote/ensure-connectivity.ps1 -Json
+$env:AUTORESEARCH_MODE = 'develop'
+git commit
 ```
 
-## Safety model
+The versioned repo-local plugin package is:
 
-The scripts intentionally do not let an agent freely compose SSH commands.
-Experiment automation should call these fixed entrypoints only.
+```text
+plugins/codex-autoresearch-v2/
+```
 
-- Daily paper automation may call `doctor.ps1` only.
-- Auto experiment loops may call `ensure-connectivity.ps1`, `sync-code.ps1`,
-  `submit-autoresearch-trial.ps1`, `check-job.ps1`, and `fetch-results.ps1`.
-- `submit-smoke-test.ps1` remains available for manual fixed smoke checks.
-- Full training requires `submit-job.ps1 -ConfirmFullTraining`.
-- Remote operations use the normal SSH host alias, never the tunnel-only alias.
-- The tunnel alias is reserved for maintaining the local proxy port.
-- Remote experiment files are created under `<remote-workspace-root>/experiments/<experiment-id>`.
-- Fixed remote entry scripts live under `<remote-workspace-root>/bin`.
-
-The local copies of those remote entry scripts are kept in
-`scripts/remote/remote-bin/` and deployed to `<remote-workspace-root>/bin`.
-
-## Local configuration
-
-Copy `config/remote.example.psd1` to `config/remote.local.psd1` for real
-server values. Copy `config/autoresearch-train.example.psd1` to
-`config/autoresearch-train.local.psd1` for real training paths. The local files
-are ignored by Git.
-
-## Local Codex Autoresearch Adapter
-
-The project-local `codex-autoresearch` skill is installed under
-`.agents/skills/codex-autoresearch/`. The upstream Windows skill snapshot under
-`.agents/vendor/codex-autoresearch-windows-skill/` is optional, ignored by Git,
-and reported by the autoresearch doctor as informational only.
-
-This adapter is foreground-only and explicit-invocation-only. It must not use
-background runtime control, `codex exec`, hooks, Full Access bypass paths, or
-arbitrary SSH during skill launch.
-
-The Karpathy-style GPU path is a bounded remote trial bridge, not a free-form
-SSH surface. After explicit pre-launch approval, `$codex-autoresearch` may use:
+## Typical Flow
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\remote\submit-autoresearch-trial.ps1 -ExperimentId <id> -Json
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\remote\doctor.ps1 -Json
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\remote\autoresearch-v2.ps1 -Mode deploy -RunTag doctor -Json
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\remote\autoresearch-v2.ps1 -Mode bootstrap -RunTag <run-tag> -Json
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\remote\autoresearch-v2.ps1 -Mode inspect -RunTag <run-tag> -Worker w1 -Json
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\remote\autoresearch-v2.ps1 -Mode apply -RunTag <run-tag> -Worker w1 -SourcePath <path> -Json
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\remote\autoresearch-v2.ps1 -Mode baseline -RunTag <run-tag> -Worker w1 -Json
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\remote\autoresearch-v2.ps1 -Mode run -RunTag <run-tag> -AllWorkers -Json
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\remote\autoresearch-v2.ps1 -Mode status -RunTag <run-tag> -Json
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\remote\autoresearch-v2.ps1 -Mode collect -RunTag <run-tag> -Json
 ```
 
-Trial parameters live in `config/autoresearch-train.example.psd1`; copy that to
-`config/autoresearch-train.local.psd1` for machine-specific values. The default
-remote target is the TVI-LFM Stage A PMT_VIT config, while the PMT-SYSU
-directory is used only as the pretrained ViT weight source. Full training still
-requires a separate explicit
-`scripts\remote\submit-job.ps1 -ConfirmFullTraining` command.
+## Stage A Notes
 
-Use `Gpu = 'auto'` in the local training config to let the fixed remote
-entrypoint pick an idle GPU with `nvidia-smi`. TVI-LFM metrics are normalized to
-`metrics.json` with `primary_metric`, `mAP`, `rank1`, and `mINP` for
-autoresearch comparison.
+The current Stage A sampling/mining selection note is tracked in:
 
-Check the local adapter state with:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\autoresearch\doctor.ps1 -Json
+```text
+reports/stage-a-results.md
 ```
-
-The current workspace root must be a git repository before a managed
-autoresearch run can start, because the helper scripts store a git-local pointer
-to `autoresearch-results/context.json`.

@@ -9,6 +9,7 @@ id_rsa*
 id_ed25519*
 config/*.local.psd1
 autoresearch-results/
+autoresearch-runs/
 experiments/*/remote/*.json
 .agents/vendor/
 research-ops/tmp/

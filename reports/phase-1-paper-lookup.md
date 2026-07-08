@@ -109,7 +109,7 @@ Project modification risk: low.
 The Skill instructs the agent to call REST APIs and return results. It does not
 instruct creating a paper database, editing source code, installing Zotero,
 connecting SSH, using GPU, starting training, or invoking
-`codex-autoresearch`.
+`codex-autoresearch-v2`.
 
 ## Minimal Retrieval Tests
 
@@ -157,7 +157,7 @@ Recommended to enter Phase 2, with two caveats:
    arXiv, OpenAlex, and Crossref as the initial no-key retrieval path.
 
 No Zotero dependency, paper database, `research-ops`, SSH connection,
-`codex-autoresearch`, GPU training, or formal literature store was created in
+`codex-autoresearch-v2`, GPU training, or formal literature store was created in
 Phase 1.
 
 ## Verdict

@@ -175,7 +175,7 @@ Confirmed:
 
 - No SSH connection was made.
 - No GPU or training process was started.
-- `codex-autoresearch` was not invoked.
+- `codex-autoresearch-v2` was not invoked.
 - No PDF download was performed.
 - No real Zotero item was created, updated, or deleted.
 - API keys were not written to project files or SQLite.
