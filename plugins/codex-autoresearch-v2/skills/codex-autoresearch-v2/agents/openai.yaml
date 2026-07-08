@@ -1,0 +1,8 @@
+interface:
+  display_name: "Codex Autoresearch v2 Invoke"
+  short_description: "Call sealed remote-first autoresearch runs"
+  brand_color: "#0F766E"
+  default_prompt: "Use $codex-autoresearch-v2 to launch, resume, inspect, or collect a sealed remote-first autoresearch run."
+
+policy:
+  allow_implicit_invocation: false
