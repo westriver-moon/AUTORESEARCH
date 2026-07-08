@@ -28,6 +28,10 @@ doctor.ps1               Read-only SSH / proxy / remote-entry health check.
 ensure-connectivity.ps1  Starts the local tunnel helper when needed.
 submit-smoke-test.ps1    Fixed remote smoke / preflight entrypoint.
 submit-job.ps1           Human-confirmed full training entrypoint.
+submit-sampling-mining-ablation.ps1
+                         Manual sampling/mining ablation control wrapper.
+submit-mbpatch-light-ablation.ps1
+                         Manual mbpatch-light ablation control wrapper.
 check-job.ps1            Reads fixed remote status for manual jobs.
 fetch-results.ps1        Fetches approved result files for manual jobs.
 cancel-own-job.ps1       Cancels only the job matching the experiment id.
@@ -49,6 +53,8 @@ remote-bin/autoresearch_v2_gpu_lease.py
 remote-bin/autoresearch_v2_metric_tvilfm.py
 remote-bin/autoresearch_v2_mode_guard.py
 remote-bin/run_autoresearch_v2_bridge.sh
+remote-bin/run_sampling_mining_ablation_bridge.sh
+remote-bin/run_mbpatch_light_ablation_bridge.sh
 ```
 
 ## Mode Boundary

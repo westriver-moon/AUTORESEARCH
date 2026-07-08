@@ -28,6 +28,8 @@ outside the autonomous loop:
 ```text
 scripts/remote/submit-smoke-test.ps1
 scripts/remote/submit-job.ps1
+scripts/remote/submit-sampling-mining-ablation.ps1
+scripts/remote/submit-mbpatch-light-ablation.ps1
 scripts/remote/check-job.ps1
 scripts/remote/fetch-results.ps1
 scripts/remote/cancel-own-job.ps1
@@ -99,4 +101,12 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\remote\autoresea
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\remote\autoresearch-v2.ps1 -Mode run -RunTag <run-tag> -AllWorkers -Json
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\remote\autoresearch-v2.ps1 -Mode status -RunTag <run-tag> -Json
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\remote\autoresearch-v2.ps1 -Mode collect -RunTag <run-tag> -Json
+```
+
+## Stage A Notes
+
+The current Stage A sampling/mining selection note is tracked in:
+
+```text
+reports/stage-a-results.md
 ```
