@@ -25,7 +25,7 @@ python .agents\skills\paper-analyzer\scripts\generate_html.py <article.md> <arti
 - Do not modify Zotero items, collections, notes, annotations, or PDFs.
 - Write outputs only under `research-ops/analysis/papers/`.
 - Clone or inspect code only under `research-ops/tmp/paper-code/` when code analysis is needed.
-- Do not connect SSH, use GPU, start training, or call `$codex-autoresearch`.
+- Do not connect SSH, use GPU, start training, or call `$codex-autoresearch-v2`.
 - No extra API key is required by this Skill.
 
 ## Source And Adaptation

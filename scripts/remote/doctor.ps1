@@ -68,7 +68,6 @@ $remotePrereq = Invoke-RemoteSsh `
 $checks.remote_proxy_scripts_exist = ($remotePrereq.exit_code -eq 0)
 
 $remoteEntries = @(
-    [string] $config.RemoteAutoresearchTrialEntry,
     [string] $config.RemoteSmokeEntry,
     [string] $config.RemoteTrainEntry,
     [string] $config.RemoteStatusEntry,

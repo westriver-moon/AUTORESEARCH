@@ -7,7 +7,6 @@
 
     RemoteProxyRoot = '/home/research/researchops/non_research/codex_proxy'
     RemoteWorkspaceRoot = '/home/research/researchops'
-    RemoteAutoresearchTrialEntry = '/home/research/researchops/bin/run_autoresearch_trial.sh'
     RemoteSmokeEntry = '/home/research/researchops/bin/run_smoke_test.sh'
     RemoteTrainEntry = '/home/research/researchops/bin/run_train.sh'
     RemoteStatusEntry = '/home/research/researchops/bin/check_job.sh'

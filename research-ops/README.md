@@ -20,7 +20,7 @@ normalization scripts, and Zotero integration scaffolding.
 
 - No SSH connections.
 - No GPU usage or training.
-- No `codex-autoresearch` calls.
+- No `codex-autoresearch-v2` calls.
 - No PDF downloading by default.
 - No writes to Zotero unless `zotero_local_ingest.py --yes` is passed.
 - No API keys stored in project files.

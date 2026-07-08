@@ -22,7 +22,6 @@ function Get-DefaultRemoteConfig {
         ProxyTaskName = "CodexProxyTunnelGpuHost-Every5Min"
         RemoteProxyRoot = "/home/research/researchops/non_research/codex_proxy"
         RemoteWorkspaceRoot = "/home/research/researchops"
-        RemoteAutoresearchTrialEntry = "/home/research/researchops/bin/run_autoresearch_trial.sh"
         RemoteSmokeEntry = "/home/research/researchops/bin/run_smoke_test.sh"
         RemoteTrainEntry = "/home/research/researchops/bin/run_train.sh"
         RemoteStatusEntry = "/home/research/researchops/bin/check_job.sh"
@@ -40,7 +39,6 @@ function Get-RemoteConfig {
 
     $config = Get-DefaultRemoteConfig
     $localConfig = Join-Path $ProjectRoot "config\remote.local.psd1"
-
     if (Test-Path -LiteralPath $localConfig) {
         $loaded = Import-PowerShellDataFile -LiteralPath $localConfig
         foreach ($key in $loaded.Keys) {

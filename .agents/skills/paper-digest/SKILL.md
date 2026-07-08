@@ -20,7 +20,7 @@ Do not reimplement Zotero reads, PDF text extraction, reading-card generation, o
 - Read only from local Zotero Desktop through `http://127.0.0.1:23119/api`.
 - Write generated artifacts only under `research-ops/library/parsed/`, `research-ops/notes/papers/`, and `research-ops/library/kg/`.
 - Do not modify Zotero items, collections, annotations, or PDFs.
-- Do not connect SSH, start GPU jobs, call `$codex-autoresearch`, or run training.
+- Do not connect SSH, start GPU jobs, call `$codex-autoresearch-v2`, or run training.
 - Do not call cloud LLMs unless the user explicitly asks for LLM-based summarization later.
 
 ## Default Target
