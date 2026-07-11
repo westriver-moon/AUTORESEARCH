@@ -61,6 +61,42 @@ function Write-V2Status {
     Write-StatusJson -Data $status -Path $outPath -Json:$Json
 }
 
+function Complete-V2BridgeResult {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Name,
+        [Parameter(Mandatory = $true)]
+        [object] $Result,
+        [Parameter(Mandatory = $false)]
+        [hashtable] $Details = @{},
+        [Parameter(Mandatory = $false)]
+        [scriptblock] $OnSuccess
+    )
+
+    $payload = $null
+    $parseError = ""
+    try {
+        $payload = Convert-BridgeOutput -Text ([string] $Result.output)
+    } catch {
+        $parseError = $_.Exception.Message
+    }
+
+    $Details.remote = $payload
+    $Details.raw = [string] $Result.output
+    if (-not [string]::IsNullOrWhiteSpace($parseError)) {
+        $Details.error = $parseError
+    }
+
+    $ok = ([int] $Result.exit_code -eq 0) -and [string]::IsNullOrWhiteSpace($parseError)
+    if ($ok -and $null -ne $OnSuccess) {
+        $null = & $OnSuccess $payload
+    }
+    Write-V2Status -Name $Name -Ok $ok -Details $Details
+    if (-not $ok) {
+        exit 1
+    }
+}
+
 try {
     switch ($Mode) {
         "deploy" {
@@ -106,12 +142,9 @@ try {
                     "--lease-root", [string] $v2Config.RemoteLeaseRoot,
                     "--run-tag", $RunTag,
                     "doctor"
-                )
-            $payload = Convert-BridgeOutput -Text $result.output
-            Write-V2Status -Name "doctor" -Ok ($result.exit_code -eq 0) -Details @{
-                remote = $payload
-                raw = $result.output
-            }
+                ) `
+                -AllowFailure
+            Complete-V2BridgeResult -Name "doctor" -Result $result
             break
         }
         default {
@@ -157,14 +190,11 @@ try {
                     "--worker-count", [string] $effectiveWorkers,
                     "--keep-threshold", [string] $effectiveThreshold
                 )
-                $result = Invoke-AutoresearchV2Bridge -RemoteConfig $remoteConfig -V2Config $v2Config -Arguments $argsList
-                $payload = Convert-BridgeOutput -Text $result.output
-                    Write-V2Status -Name "bootstrap" -Ok ($result.exit_code -eq 0) -Details @{
-                        remote = $payload
-                        raw = $result.output
-                        program = $programFull
-                        target = $targetFull
-                        remote_upload_root = $remoteUploadSpecRoot
+                $result = Invoke-AutoresearchV2Bridge -RemoteConfig $remoteConfig -V2Config $v2Config -Arguments $argsList -AllowFailure
+                Complete-V2BridgeResult -Name "bootstrap" -Result $result -Details @{
+                    program = $programFull
+                    target = $targetFull
+                    remote_upload_root = $remoteUploadSpecRoot
                 }
                 break
             }
@@ -180,9 +210,10 @@ try {
                         "--run-tag", $RunTag,
                         "inspect",
                         "--worker", $Worker
-                    )
-                    $payload = Convert-BridgeOutput -Text $result.output
-                    if ($result.exit_code -eq 0 -and $null -ne $payload) {
+                    ) -AllowFailure
+                    $downloadInspect = {
+                        param($payload)
+                        if ($null -eq $payload) { return }
                         $localInspect = Join-Path (Join-Path $localRunDir "inspect") $Worker
                         if (Test-Path -LiteralPath $localInspect) {
                             Remove-Item -Recurse -Force -LiteralPath $localInspect
@@ -198,10 +229,7 @@ try {
                             -LocalPath $localInspect `
                             -Recurse | Out-Null
                     }
-                    Write-V2Status -Name "inspect" -Ok ($result.exit_code -eq 0) -Details @{
-                        remote = $payload
-                        raw = $result.output
-                    }
+                    Complete-V2BridgeResult -Name "inspect" -Result $result -OnSuccess $downloadInspect
                     break
                 }
                 "apply" {
@@ -230,11 +258,8 @@ try {
                     if (-not [string]::IsNullOrWhiteSpace($Note)) {
                         $argsList += @("--note", $Note)
                     }
-                    $result = Invoke-AutoresearchV2Bridge -RemoteConfig $remoteConfig -V2Config $v2Config -Arguments $argsList
-                    $payload = Convert-BridgeOutput -Text $result.output
-                    Write-V2Status -Name "apply" -Ok ($result.exit_code -eq 0) -Details @{
-                        remote = $payload
-                        raw = $result.output
+                    $result = Invoke-AutoresearchV2Bridge -RemoteConfig $remoteConfig -V2Config $v2Config -Arguments $argsList -AllowFailure
+                    Complete-V2BridgeResult -Name "apply" -Result $result -Details @{
                         source = $sourceFull.Path
                     }
                     break
@@ -280,8 +305,11 @@ try {
                     }
                 }
                 $result = Invoke-AutoresearchV2Bridge -RemoteConfig $remoteConfig -V2Config $v2Config -Arguments $argsList -AllowFailure
-                $payload = Convert-BridgeOutput -Text $result.output
-                if ($Mode -eq "collect" -and $result.exit_code -eq 0 -and $null -ne $payload) {
+                $collectResults = $null
+                if ($Mode -eq "collect") {
+                    $collectResults = {
+                        param($payload)
+                        if ($null -eq $payload) { return }
                     $localCollectRoot = Join-Path $localRunDir "collected"
                     if (Test-Path -LiteralPath $localCollectRoot) {
                         Remove-Item -Recurse -Force -LiteralPath $localCollectRoot
@@ -292,11 +320,9 @@ try {
                         -RemotePath ([string] $payload.run_root) `
                         -LocalPath $localCollectRoot `
                         -Recurse | Out-Null
+                    }
                 }
-                Write-V2Status -Name $Mode -Ok ($result.exit_code -eq 0) -Details @{
-                    remote = $payload
-                    raw = $result.output
-                }
+                Complete-V2BridgeResult -Name $Mode -Result $result -OnSuccess $collectResults
             }
         }
     }

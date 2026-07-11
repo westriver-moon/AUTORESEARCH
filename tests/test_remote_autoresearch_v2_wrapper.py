@@ -137,6 +137,7 @@ class RemoteAutoresearchV2WrapperTest(unittest.TestCase):
         self.ssh_log = self.workspace / "fake_ssh.jsonl"
         self.scp_log = self.workspace / "fake_scp.jsonl"
         self.run_tag = "wrapper-run"
+        self.bridge_exit_code = 0
         self._write_fake_transport()
 
     def tearDown(self) -> None:
@@ -201,7 +202,9 @@ class RemoteAutoresearchV2WrapperTest(unittest.TestCase):
                     payload = {"ok": True, "command": "doctor"}
                 else:
                     payload = {"ok": True}
-                print(json.dumps(payload, ensure_ascii=False))
+                forced_output = os.environ.get("AR2_FAKE_BRIDGE_OUTPUT")
+                print(forced_output if forced_output is not None else json.dumps(payload, ensure_ascii=False))
+                raise SystemExit(int(os.environ.get("AR2_FAKE_BRIDGE_EXIT", "0")))
                 """
             ).strip()
             + "\n",
@@ -276,6 +279,7 @@ class RemoteAutoresearchV2WrapperTest(unittest.TestCase):
         env["AR2_FAKE_SCP_LOG"] = str(self.scp_log)
         env["AR2_FAKE_RUN_TAG"] = self.run_tag
         env["AR2_FAKE_REMOTE_ROOT"] = self.remote_root
+        env["AR2_FAKE_BRIDGE_EXIT"] = str(self.bridge_exit_code)
         return env
 
     def _read_jsonl(self, path: Path) -> list[dict[str, object]]:
@@ -284,7 +288,16 @@ class RemoteAutoresearchV2WrapperTest(unittest.TestCase):
         return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
     def run_ps(self, *extra_args: str, expect_ok: bool = True) -> dict[str, object]:
-        completed = subprocess.run(
+        completed = self.run_ps_process(*extra_args)
+        if expect_ok and completed.returncode != 0:
+            raise AssertionError(f"powershell wrapper failed:\nstdout:\n{completed.stdout}\nstderr:\n{completed.stderr}")
+        payload = json.loads(completed.stdout)
+        if expect_ok:
+            self.assertTrue(payload["ok"], payload)
+        return payload
+
+    def run_ps_process(self, *extra_args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
             [
                 "powershell.exe",
                 "-NoProfile",
@@ -305,12 +318,6 @@ class RemoteAutoresearchV2WrapperTest(unittest.TestCase):
             text=True,
             check=False,
         )
-        if expect_ok and completed.returncode != 0:
-            raise AssertionError(f"powershell wrapper failed:\nstdout:\n{completed.stdout}\nstderr:\n{completed.stderr}")
-        payload = json.loads(completed.stdout)
-        if expect_ok:
-            self.assertTrue(payload["ok"], payload)
-        return payload
 
     def test_deploy_uses_posix_remote_parent(self) -> None:
         payload = self.run_ps("-Mode", "deploy", "-RunTag", self.run_tag)
@@ -343,6 +350,59 @@ class RemoteAutoresearchV2WrapperTest(unittest.TestCase):
         scp_entries = self._read_jsonl(self.scp_log)
         downloads = [entry for entry in scp_entries if entry["direction"] == "download"]
         self.assertEqual(len(downloads), 1)
+
+    def test_nonzero_bridge_exit_is_propagated_for_allow_failure_modes(self) -> None:
+        self.bridge_exit_code = 7
+        for mode in ("baseline", "run", "resume", "status", "collect", "stop", "sync-best"):
+            with self.subTest(mode=mode):
+                completed = self.run_ps_process("-Mode", mode, "-RunTag", self.run_tag, "-Foreground")
+                self.assertNotEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+                payload = json.loads(completed.stdout)
+                self.assertFalse(payload["ok"])
+                status_path = self.workspace / "autoresearch-runs" / self.run_tag / "remote" / f"{mode}.json"
+                self.assertTrue(status_path.exists())
+                self.assertFalse(json.loads(status_path.read_text(encoding="utf-8-sig"))["ok"])
+
+    def test_doctor_propagates_nonzero_bridge_exit(self) -> None:
+        self.bridge_exit_code = 7
+        completed = self.run_ps_process("-Mode", "doctor", "-RunTag", self.run_tag)
+        self.assertNotEqual(completed.returncode, 0)
+        payload = json.loads(completed.stdout)
+        self.assertFalse(payload["ok"])
+
+    def test_non_json_bridge_failure_preserves_raw_diagnostics(self) -> None:
+        self.bridge_exit_code = 7
+        env = self._env()
+        env["AR2_FAKE_BRIDGE_OUTPUT"] = "bridge exploded before emitting JSON"
+        completed = subprocess.run(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(self.workspace / "scripts" / "remote" / "autoresearch-v2.ps1"),
+                "-Mode",
+                "status",
+                "-RunTag",
+                self.run_tag,
+                "-RemoteHost",
+                "fake-remote",
+                "-SshConfigPath",
+                str(self.ssh_config),
+                "-Json",
+            ],
+            cwd=self.workspace,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertNotEqual(completed.returncode, 0)
+        payload = json.loads(completed.stdout)
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["details"]["raw"], "bridge exploded before emitting JSON")
+        self.assertTrue(payload["details"]["error"])
 
 
 if __name__ == "__main__":
