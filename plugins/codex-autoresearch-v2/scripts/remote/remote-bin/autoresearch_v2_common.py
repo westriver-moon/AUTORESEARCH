@@ -22,12 +22,18 @@ RESULTS_HEADER = [
     "timestamp",
     "worker",
     "phase",
+    "trial_id",
     "branch",
     "commit",
     "metric",
     "best_metric_before",
     "delta",
     "decision",
+    "completion_reason",
+    "process_exit_code",
+    "metric_extracted",
+    "error_type",
+    "timed_out",
     "budget_minutes",
     "run_dir",
     "notes",
@@ -60,7 +66,13 @@ def read_json(path: Path, default: Any | None = None) -> Any:
 
 def write_json(path: Path, data: Any) -> None:
     ensure_parent(path)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    temporary = path.with_name(f".{path.name}.tmp-{os.getpid()}-{time.time_ns()}")
+    try:
+        temporary.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        os.replace(temporary, path)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
 
 
 def append_jsonl(path: Path, data: Any) -> None:
@@ -73,6 +85,13 @@ def append_results_row(path: Path, row: dict[str, Any]) -> None:
     ensure_parent(path)
     if not path.exists():
         path.write_text("\t".join(RESULTS_HEADER) + "\n", encoding="utf-8")
+    else:
+        first_line = path.read_text(encoding="utf-8").splitlines()[:1]
+        actual_header = first_line[0].split("\t") if first_line else []
+        if actual_header != RESULTS_HEADER:
+            raise AutoresearchV2Error(
+                "results.tsv schema mismatch; archive or migrate the existing run before continuing"
+            )
     values = []
     for key in RESULTS_HEADER:
         value = row.get(key, "")

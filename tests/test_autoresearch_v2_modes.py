@@ -14,6 +14,8 @@ INVOKE_SKILL = PROJECT_ROOT / ".agents" / "skills" / "codex-autoresearch-v2" / "
 DEV_SKILL = PROJECT_ROOT / ".agents" / "skills" / "codex-autoresearch-v2-dev" / "SKILL.md"
 PLUGIN_ROOT = PROJECT_ROOT / "plugins" / "codex-autoresearch-v2"
 GIT_HOOK = PROJECT_ROOT / ".githooks" / "pre-commit"
+LEGACY_SKILL = PROJECT_ROOT / ".agents" / "skills" / "codex-autoresearch"
+LEGACY_AUDIT = PROJECT_ROOT / ".agents" / "audit" / "codex-autoresearch-legacy"
 
 
 class AutoresearchV2ModePolicyTest(unittest.TestCase):
@@ -100,6 +102,7 @@ class AutoresearchV2ModePolicyTest(unittest.TestCase):
 
         self.assertEqual(plugin["name"], "codex-autoresearch-v2")
         self.assertEqual(plugin["version"], policy["autoresearch"]["packaged_plugin"]["version"])
+        self.assertEqual(contract["version"], plugin["version"])
         self.assertEqual(contract["mode"], "invoke")
         self.assertTrue((PLUGIN_ROOT / "skills" / "codex-autoresearch-v2" / "SKILL.md").exists())
         self.assertTrue((PLUGIN_ROOT / "scripts" / "remote" / "autoresearch-v2.ps1").exists())
@@ -109,6 +112,12 @@ class AutoresearchV2ModePolicyTest(unittest.TestCase):
         self.assertTrue((PLUGIN_ROOT / "scripts" / "remote" / "lib" / "ssh.ps1").exists())
         self.assertTrue((PLUGIN_ROOT / "scripts" / "remote" / "lib" / "result.ps1").exists())
         self.assertTrue((PLUGIN_ROOT / "scripts" / "remote" / "lib" / "autoresearch_v2.ps1").exists())
+
+    def test_legacy_skill_is_not_discoverable(self) -> None:
+        self.assertFalse(LEGACY_SKILL.exists())
+        self.assertTrue((LEGACY_AUDIT / "SKILL.md").exists())
+        self.assertTrue(INVOKE_SKILL.exists())
+        self.assertTrue(DEV_SKILL.exists())
 
 
 if __name__ == "__main__":

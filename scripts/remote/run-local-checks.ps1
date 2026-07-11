@@ -142,7 +142,7 @@ Add-Check `
     -Detail "Development skill should be the only agent-facing mode that edits sealed paths."
 Add-Check `
     -Name "v2_plugin_packaged" `
-    -Ok ($pluginText.Contains('"name": "codex-autoresearch-v2"') -and $pluginText.Contains('"version": "0.1.0"') -and $policyText.Contains('"path": "plugins/codex-autoresearch-v2"')) `
+    -Ok ($pluginText.Contains('"name": "codex-autoresearch-v2"') -and $pluginText.Contains('"version": "0.1.1"') -and $policyText.Contains('"version": "0.1.1"') -and $policyText.Contains('"path": "plugins/codex-autoresearch-v2"')) `
     -Detail "Autoresearch v2 should have a versioned repo-local plugin package."
 
 $failed = @($checks | Where-Object { -not $_.ok })

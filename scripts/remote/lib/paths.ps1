@@ -23,4 +23,3 @@ function Get-RemoteExperimentRoot {
     Assert-ExperimentId -ExperimentId $ExperimentId
     return Join-RemotePath -Left ([string] $Config.RemoteWorkspaceRoot) -Right ("experiments/" + $ExperimentId)
 }
-

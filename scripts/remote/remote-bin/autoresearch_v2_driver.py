@@ -51,7 +51,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--run-tag", required=True)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    subparsers.add_parser("doctor")
+    doctor_cmd = subparsers.add_parser("doctor")
+    doctor_cmd.add_argument("--target")
 
     bootstrap = subparsers.add_parser("bootstrap")
     bootstrap.add_argument("--program", required=True)
@@ -221,6 +222,11 @@ def update_worker_status(
     last_commit: str | None = None,
     last_run_dir: str | None = None,
     trial_id: str | None = None,
+    trial_commit: str | None = None,
+    run_dir: str | None = None,
+    completion_reason: str | None = None,
+    process_exit_code: int | None = None,
+    metric_extracted: bool | None = None,
     gpu: str | None = None,
     note: str | None = None,
 ) -> None:
@@ -241,6 +247,15 @@ def update_worker_status(
         entry["last_run_dir"] = last_run_dir
     if trial_id is not None:
         entry["trial_id"] = trial_id
+    if trial_commit is not None:
+        entry["trial_commit"] = trial_commit
+    if run_dir is not None:
+        entry["run_dir"] = run_dir
+    if completion_reason is not None:
+        entry["completion_reason"] = completion_reason
+    entry["process_exit_code"] = process_exit_code
+    if metric_extracted is not None:
+        entry["metric_extracted"] = metric_extracted
     if gpu is not None:
         entry["gpu"] = gpu
     if note is not None:
@@ -308,6 +323,12 @@ def bootstrap(args: argparse.Namespace) -> dict[str, Any]:
             "last_decision": None,
             "last_commit": git_head(tree),
             "last_run_dir": "",
+            "trial_id": "",
+            "trial_commit": "",
+            "run_dir": "",
+            "completion_reason": "",
+            "process_exit_code": None,
+            "metric_extracted": False,
             "gpu": "",
             "note": "",
             "updated_at": utc_now(),
@@ -422,6 +443,16 @@ def launch_workers(
     foreground: bool,
 ) -> dict[str, Any]:
     state = ensure_initialized(args)
+    if phase == "baseline":
+        with file_lock(lock_path(args)):
+            latest = load_state(args)
+            baseline_active = any(
+                entry.get("status") in {"queued", "running"}
+                and str(entry.get("note") or "").startswith("baseline")
+                for entry in latest["workers"].values()
+            )
+            if latest.get("baseline") is not None or baseline_active:
+                raise AutoresearchV2Error("baseline already exists or is already running")
     workers = selected_workers(state, worker, all_workers)
     budget = resolve_budget_minutes(state, budget_minutes)
     started: list[dict[str, Any]] = []
@@ -516,6 +547,94 @@ def measure_metric(state: dict[str, Any], run_dir: Path, run_output_dir: Path, s
     return float(payload[primary_key]), payload
 
 
+def trial_is_logged(path: Path, trial_id: str) -> bool:
+    if not path.exists():
+        return False
+    lines = path.read_text(encoding="utf-8").splitlines()
+    if not lines:
+        return False
+    header = lines[0].split("\t")
+    if "trial_id" not in header:
+        return False
+    index = header.index("trial_id")
+    return any(len(row := line.split("\t")) > index and row[index] == trial_id for line in lines[1:])
+
+
+def event_is_logged(path: Path, trial_id: str) -> bool:
+    if not path.exists():
+        return False
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if payload.get("event") == "trial-outcome" and payload.get("trial_id") == trial_id:
+            return True
+    return False
+
+
+def record_trial_outcome(args: argparse.Namespace, outcome: dict[str, Any]) -> None:
+    run_dir = Path(str(outcome["run_dir"]))
+    outcome_path = run_dir / "outcome.json"
+    authoritative = outcome
+    if outcome_path.exists():
+        existing = read_json(outcome_path, {})
+        if existing != outcome:
+            raise AutoresearchV2Error(f"conflicting outcome already exists for trial_id {outcome['trial_id']}")
+        authoritative = existing
+    else:
+        write_json(outcome_path, outcome)
+    trial_id = str(authoritative["trial_id"])
+    if not trial_is_logged(results_path(args), trial_id):
+        append_results_row(results_path(args), authoritative)
+    if not event_is_logged(events_path(args), trial_id):
+        append_jsonl(events_path(args), {"event": "trial-outcome", **authoritative})
+
+
+def build_trial_outcome(
+    *,
+    worker: str,
+    phase: str,
+    trial_id: str,
+    branch: str,
+    commit: str,
+    metric: float | None,
+    best_metric_before: float | None,
+    delta: float | str,
+    decision: str,
+    completion_reason: str,
+    process_exit_code: int | None,
+    metric_extracted: bool,
+    error_type: str,
+    timed_out: bool,
+    budget_minutes: int,
+    run_dir: Path,
+    notes: str,
+) -> dict[str, Any]:
+    return {
+        "timestamp": utc_now(),
+        "worker": worker,
+        "phase": phase,
+        "trial_id": trial_id,
+        "branch": branch,
+        "commit": commit,
+        "metric": metric,
+        "best_metric_before": best_metric_before,
+        "delta": delta,
+        "decision": decision,
+        "completion_reason": completion_reason,
+        "process_exit_code": process_exit_code,
+        "metric_extracted": metric_extracted,
+        "error_type": error_type,
+        "timed_out": timed_out,
+        "budget_minutes": budget_minutes,
+        "run_dir": str(run_dir),
+        "notes": notes,
+    }
+
+
 def run_worker_once(
     args: argparse.Namespace,
     *,
@@ -539,6 +658,11 @@ def run_worker_once(
 
     lease = None
     selected_gpu = ""
+    completion_reason = "completed"
+    process_exit_code: int | None = None
+    timed_out = False
+    metric_extracted = False
+    metric_payload: dict[str, Any] = {}
     try:
         gpu_policy = str(state["target"]["gpu"].get("policy") or "none")
         selector = str(state["target"]["gpu"].get("selector") or "0")
@@ -592,33 +716,49 @@ def run_worker_once(
             cwd = worker_root / str(target["run"].get("cwd") or ".")
             with (run_dir / "command.json").open("w", encoding="utf-8") as handle:
                 json.dump({"command": command, "cwd": str(cwd)}, handle, ensure_ascii=False, indent=2)
-            with (run_dir / "process.log").open("w", encoding="utf-8") as log_handle:
-                completed = subprocess.run(
-                    command,
-                    cwd=cwd,
-                    env=env,
-                    stdout=log_handle,
-                    stderr=subprocess.STDOUT,
-                    timeout=max(budget_minutes, 1) * 60,
-                    check=False,
-                    text=True,
-                )
-            if completed.returncode != 0:
-                raise AutoresearchV2Error(f"worker command failed with exit code {completed.returncode}")
+            try:
+                with (run_dir / "process.log").open("w", encoding="utf-8") as log_handle:
+                    completed = subprocess.run(
+                        command,
+                        cwd=cwd,
+                        env=env,
+                        stdout=log_handle,
+                        stderr=subprocess.STDOUT,
+                        timeout=max(budget_minutes, 1) * 60,
+                        check=False,
+                        text=True,
+                    )
+                process_exit_code = completed.returncode
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                completion_reason = "timeout"
+                process_exit_code = None
+            if process_exit_code not in {0, None}:
+                completion_reason = "process_error"
+                raise AutoresearchV2Error(f"worker command failed with exit code {process_exit_code}")
 
         if simulate_metric is not None and simulate_delay_seconds > 0:
             time.sleep(simulate_delay_seconds)
 
-        metric, metric_payload = measure_metric(state, run_dir, run_output_dir, simulate_metric)
+        try:
+            metric, metric_payload = measure_metric(state, run_dir, run_output_dir, simulate_metric)
+            metric_extracted = True
+        except Exception:
+            if not timed_out:
+                completion_reason = "metric_error"
+            raise
 
         with file_lock(lock_path(args)):
             latest = load_state(args)
+            if phase == "baseline" and latest.get("baseline") is not None:
+                raise AutoresearchV2Error("baseline already exists for this run")
+            if phase != "baseline" and latest.get("baseline") is None:
+                raise AutoresearchV2Error("baseline must be established before run or resume")
             best_metric_before = latest.get("best_metric")
             best_commit_before = str(latest.get("best_commit") or "")
             threshold = float(latest.get("keep_threshold") or 0.0)
             direction = str(latest["program"]["direction"])
-            keep = False
-            if best_metric_before is None or phase == "baseline":
+            if phase == "baseline":
                 keep = True
             elif direction == "higher":
                 keep = metric > float(best_metric_before) + threshold
@@ -630,7 +770,7 @@ def run_worker_once(
                 latest["best_metric"] = metric
                 latest["best_commit"] = head_commit
                 git(Path(latest["repo_root"]), "branch", "-f", latest["best_branch"], head_commit)
-                if latest.get("baseline") is None:
+                if phase == "baseline":
                     latest["baseline"] = {"metric": metric, "commit": head_commit, "worker": worker, "trial_id": trial_id}
                 status_name = "kept"
                 retained_commit = head_commit
@@ -638,50 +778,44 @@ def run_worker_once(
                 reset_worktree(worker_root, best_commit_before)
                 status_name = "discarded"
                 retained_commit = git_head(worker_root)
+            outcome = build_trial_outcome(
+                worker=worker,
+                phase=phase,
+                trial_id=trial_id,
+                branch=branch,
+                commit=head_commit,
+                metric=metric,
+                best_metric_before=best_metric_before,
+                delta=delta,
+                decision=decision,
+                completion_reason=completion_reason,
+                process_exit_code=process_exit_code,
+                metric_extracted=metric_extracted,
+                error_type="",
+                timed_out=timed_out,
+                budget_minutes=budget_minutes,
+                run_dir=run_dir,
+                notes=f"gpu={selected_gpu}",
+            )
             update_worker_status(
                 latest,
-                worker,
+                str(outcome["worker"]),
                 status=status_name,
-                last_metric=metric,
-                last_decision=decision,
+                last_metric=outcome["metric"],
+                last_decision=str(outcome["decision"]),
                 last_commit=retained_commit,
-                last_run_dir=str(run_dir),
-                trial_id=trial_id,
+                last_run_dir=str(outcome["run_dir"]),
+                trial_id=str(outcome["trial_id"]),
+                trial_commit=str(outcome["commit"]),
+                run_dir=str(outcome["run_dir"]),
+                completion_reason=str(outcome["completion_reason"]),
+                process_exit_code=outcome["process_exit_code"],
+                metric_extracted=bool(outcome["metric_extracted"]),
                 gpu=selected_gpu,
-                note=f"{phase} {decision}",
+                note=f"{outcome['phase']} {outcome['decision']}",
             )
+            record_trial_outcome(args, outcome)
             save_state(args, latest)
-            append_results_row(
-                results_path(args),
-                {
-                    "timestamp": utc_now(),
-                    "worker": worker,
-                    "phase": phase,
-                    "branch": branch,
-                    "commit": head_commit,
-                    "metric": metric,
-                    "best_metric_before": best_metric_before,
-                    "delta": delta,
-                    "decision": decision,
-                    "budget_minutes": budget_minutes,
-                    "run_dir": str(run_dir),
-                    "notes": f"gpu={selected_gpu}",
-                },
-            )
-            append_jsonl(
-                events_path(args),
-                {
-                    "timestamp": utc_now(),
-                    "event": "worker-finished",
-                    "worker": worker,
-                    "phase": phase,
-                    "trial_id": trial_id,
-                    "metric": metric,
-                    "decision": decision,
-                    "commit": head_commit,
-                    "best_metric_before": best_metric_before,
-                },
-            )
         return {
             "ok": True,
             "worker": worker,
@@ -696,37 +830,69 @@ def run_worker_once(
     except Exception as exc:
         with file_lock(lock_path(args)):
             latest = load_state(args)
+            best_metric_before = latest.get("best_metric")
+            best_commit = str(latest.get("best_commit") or "")
+            cleanup_error = ""
+            retained_commit = head_commit
+            if best_commit:
+                try:
+                    reset_worktree(worker_root, best_commit)
+                    retained_commit = git_head(worker_root)
+                except Exception as cleanup_exc:
+                    cleanup_error = f"; reset_failed={cleanup_exc}"
+            error_type = type(exc).__name__
+            if completion_reason == "completed":
+                completion_reason = "process_error"
+            outcome = build_trial_outcome(
+                worker=worker,
+                phase=phase,
+                trial_id=trial_id,
+                branch=branch,
+                commit=head_commit,
+                metric=None,
+                best_metric_before=best_metric_before,
+                delta="",
+                decision="crash",
+                completion_reason=completion_reason,
+                process_exit_code=process_exit_code,
+                metric_extracted=metric_extracted,
+                error_type=error_type,
+                timed_out=timed_out,
+                budget_minutes=budget_minutes,
+                run_dir=run_dir,
+                notes=str(exc) + cleanup_error,
+            )
+            outcome["traceback"] = traceback.format_exc()
             update_worker_status(
                 latest,
-                worker,
+                str(outcome["worker"]),
                 status="failed",
-                last_commit=head_commit,
-                last_run_dir=str(run_dir),
-                trial_id=trial_id,
+                last_decision=str(outcome["decision"]),
+                last_commit=retained_commit,
+                last_run_dir=str(outcome["run_dir"]),
+                trial_id=str(outcome["trial_id"]),
+                trial_commit=str(outcome["commit"]),
+                run_dir=str(outcome["run_dir"]),
+                completion_reason=str(outcome["completion_reason"]),
+                process_exit_code=outcome["process_exit_code"],
+                metric_extracted=bool(outcome["metric_extracted"]),
                 gpu=selected_gpu,
-                note=str(exc),
+                note=str(outcome["notes"]),
             )
+            record_trial_outcome(args, outcome)
             save_state(args, latest)
-            append_jsonl(
-                events_path(args),
-                {
-                    "timestamp": utc_now(),
-                    "event": "worker-failed",
-                    "worker": worker,
-                    "phase": phase,
-                    "trial_id": trial_id,
-                    "error": str(exc),
-                    "traceback": traceback.format_exc(),
-                },
-            )
         raise
     finally:
         if lease is not None:
             release_gpu_lease(Path(args.lease_root), str(lease.get("gpu") or ""))
         with file_lock(lock_path(args)):
             latest = load_state(args)
-            if latest["workers"][worker]["status"] not in {"kept", "discarded", "failed"}:
+            worker_status = latest["workers"][worker]["status"]
+            if worker_status not in {"kept", "discarded", "failed"}:
                 update_worker_status(latest, worker, status="idle", pid=None, note="idle")
+                save_state(args, latest)
+            elif latest["workers"][worker].get("gpu"):
+                update_worker_status(latest, worker, status=worker_status, gpu="")
                 save_state(args, latest)
 
 
@@ -804,16 +970,101 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
     return payload
 
 
+def doctor_check(name: str, ok: bool, detail: str, *, required: bool = True) -> dict[str, Any]:
+    return {"name": name, "ok": bool(ok), "required": required, "detail": detail}
+
+
+def writable_directory_check(name: str, path: Path) -> dict[str, Any]:
+    probe = path / f".autoresearch-doctor-{os.getpid()}.tmp"
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+        probe.write_text("ok\n", encoding="utf-8")
+        probe.unlink()
+        return doctor_check(name, True, str(path))
+    except Exception as exc:
+        try:
+            if probe.exists():
+                probe.unlink()
+        except OSError:
+            pass
+        return doctor_check(name, False, f"{path}: {exc}")
+
+
 def doctor(args: argparse.Namespace) -> dict[str, Any]:
     root = run_root(args)
+    checks: list[dict[str, Any]] = []
+    python_path = Path(sys.executable)
+    checks.append(
+        doctor_check(
+            "python_executable",
+            python_path.is_file() and os.access(python_path, os.X_OK),
+            str(python_path),
+        )
+    )
+    git_executable = shutil.which("git")
+    git_ok = False
+    git_detail = git_executable or "git was not found on PATH"
+    if git_executable:
+        completed = subprocess.run(
+            [git_executable, "--version"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        git_ok = completed.returncode == 0
+        git_detail = (completed.stdout or completed.stderr or git_executable).strip()
+    checks.append(doctor_check("git_executable", git_ok, git_detail))
+    checks.extend(
+        [
+            writable_directory_check("run_root_writable", root),
+            writable_directory_check("worktree_root_writable", Path(args.worktree_root_base)),
+            writable_directory_check("lease_root_writable", Path(args.lease_root)),
+        ]
+    )
+    module_root = Path(__file__).resolve().parent
+    required_modules = [
+        "autoresearch_v2_common.py",
+        "autoresearch_v2_gpu_lease.py",
+        "autoresearch_v2_metric_tvilfm.py",
+    ]
+    missing_modules = [name for name in required_modules if not (module_root / name).is_file()]
+    checks.append(
+        doctor_check(
+            "bridge_modules",
+            not missing_modules,
+            "all required modules present" if not missing_modules else "missing: " + ", ".join(missing_modules),
+        )
+    )
+    target_repo: Path | None = None
+    target_source = "not provided"
+    if args.target:
+        target = load_target_spec(Path(args.target))
+        target_repo = Path(target["repo"]["remote_root"])
+        target_source = str(Path(args.target))
+    elif state_path(args).exists():
+        existing_state = read_json(state_path(args), {})
+        if isinstance(existing_state, dict) and existing_state.get("repo_root"):
+            target_repo = Path(str(existing_state["repo_root"]))
+            target_source = str(state_path(args))
+    if target_repo is None:
+        checks.append(doctor_check("target_repo", True, "not checked: no target or initialized state", required=False))
+    else:
+        repo_check = (
+            git(target_repo, "rev-parse", "--is-inside-work-tree", check=False)
+            if git_ok and target_repo.exists()
+            else None
+        )
+        repo_ok = bool(repo_check and repo_check.returncode == 0 and repo_check.stdout.strip() == "true")
+        checks.append(doctor_check("target_repo", repo_ok, f"{target_repo} (from {target_source})"))
+    ok = all(check["ok"] for check in checks if check["required"])
     payload = {
-        "ok": True,
+        "ok": ok,
         "command": "doctor",
         "run_root": str(root),
         "worktree_root_base": str(Path(args.worktree_root_base)),
         "lease_root": str(Path(args.lease_root)),
-        "git_available": shutil.which("git") is not None,
         "python": sys.executable,
+        "checks": checks,
     }
     return payload
 
@@ -888,12 +1139,18 @@ def main() -> int:
     ensure_run_tag(args.run_tag)
     payload = dispatch(args)
     print(json.dumps(payload, ensure_ascii=False, indent=2))
-    return 0
+    return 0 if payload.get("ok", False) else 1
 
 
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except AutoresearchV2Error as exc:
-        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False, indent=2))
+    except Exception as exc:
+        print(
+            json.dumps(
+                {"ok": False, "error": str(exc), "error_type": type(exc).__name__},
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
         raise SystemExit(1) from exc

@@ -39,13 +39,10 @@ function Get-RemoteConfig {
 
     $config = Get-DefaultRemoteConfig
     $localConfig = Join-Path $ProjectRoot "config\remote.local.psd1"
-    $loadedKeys = @{}
-
     if (Test-Path -LiteralPath $localConfig) {
         $loaded = Import-PowerShellDataFile -LiteralPath $localConfig
         foreach ($key in $loaded.Keys) {
             $config[$key] = $loaded[$key]
-            $loadedKeys[$key] = $true
         }
     }
 

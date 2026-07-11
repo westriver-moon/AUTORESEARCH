@@ -14,4 +14,3 @@ function Get-StatusFilePath {
     $dir = New-ExperimentRemoteDir -ProjectRoot $ProjectRoot -ExperimentId $ExperimentId
     return Join-Path $dir ($Name + ".json")
 }
-

@@ -1,6 +1,6 @@
 {
   "name": "codex-autoresearch-v2",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Versioned invocation-only package for the remote-first autoresearch v2 runtime.",
   "author": {
     "name": "Local Research Workspace"

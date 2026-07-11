@@ -37,7 +37,7 @@
     ],
     "packaged_plugin": {
       "path": "plugins/codex-autoresearch-v2",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "mode": "invoke"
     }
   },
