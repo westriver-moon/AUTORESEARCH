@@ -1,0 +1,9 @@
+#!/usr/bin/env sh
+set -eu
+
+MODE="${AUTORESEARCH_MODE:-invoke}"
+
+git diff --cached --name-only |
+  python scripts/remote/remote-bin/autoresearch_v2_mode_guard.py \
+    --mode "$MODE" \
+    --stdin

@@ -1,0 +1,20 @@
+{
+  "name": "autoresearch",
+  "interface": {
+    "displayName": "AUTORESEARCH"
+  },
+  "plugins": [
+    {
+      "name": "codex-autoresearch-v2",
+      "source": {
+        "source": "local",
+        "path": "./plugins/codex-autoresearch-v2"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

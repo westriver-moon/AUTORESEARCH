@@ -1,0 +1,6 @@
+config/autoresearch-v2.local.psd1
+autoresearch-runs/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+.DS_Store

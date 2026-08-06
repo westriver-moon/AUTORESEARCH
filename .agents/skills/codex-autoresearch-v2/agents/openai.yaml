@@ -1,0 +1,8 @@
+interface:
+  display_name: "Codex Autoresearch v2"
+  short_description: "Select remote hosts and run generic experiment loops"
+  brand_color: "#0F766E"
+  default_prompt: "Use $codex-autoresearch-v2 to select a remote Profile, validate a schema v2 target, and run a generic metric-driven experiment loop."
+
+policy:
+  allow_implicit_invocation: false
