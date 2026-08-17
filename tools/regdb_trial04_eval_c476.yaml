@@ -1,0 +1,58 @@
+extends: /home/lab929/ybj/worktrees/aaai27_regdb_eval_c476f51/TVI-LFM/config/regdb/stage_b.yaml
+
+# Exact resolved settings for the selected Trial-04 Stage-II checkpoint.
+mode: test
+dataset: regdb
+training_mode: RGB_IR_Text
+joint_mode: uni
+pretrain_choice: PMT_VIT
+pmt_pretrained: /home/lab929/ybj/assets/pretrained/jx_vit_base_p16_224-80ecf9dd.pth
+training_weight_init: /home/lab929/ybj/assets/checkpoints/regdb_stage_a/trial_04.pth
+
+regdb_data_path: /home/lab929/ybj/assets/regdb/RegDB/
+regdb_sr_data_root: /home/lab929/ybj/assets/derived/RegDB-swinir-x2-pmt256-v1
+regdb_sr_modalities: [rgb, ir]
+regdb_sr_exact_size: true
+text_data_root: /home/lab929/ybj/assets/regdb/RegDB/Text
+
+Fix_Visual: true
+visual_unfreeze_last_n_blocks: 0
+pmt_recipe: false
+pmt_gradient_checkpointing: false
+fusion_way: parameter_add
+pa: 0.7
+Feat_Filter: false
+
+llm_aug: false
+llm_aug_prob: 0.5
+llm_aug_index: /home/lab929/ybj/assets/regdb/RegDB/Text/Blip_RGB_Qwen3_14B_AWQ/caption_qwen3_14b_awq_4x.json
+llm_aug_strategy: iid_uniform
+llm_aug_rgb_only: true
+captioner_name: Blip
+
+pid_num: 206
+img_h: 512
+img_w: 256
+img_size: [512, 256]
+num_workers: 2
+test_batch_size: 8
+
+loss_names: id,wrt
+eval_num_regdb: 1
+regdb_test_mode: t-v
+eval_text_policy: paired_visible_caption
+test_model_type: Fusion
+test_modality: Fusion
+CAT_EVAL: false
+test_flip_tta: false
+test_multi_scale: [[512, 256]]
+rerank: false
+ensemble_mode: none
+
+trial: 4
+seed: 0
+CUDA_VISIBLE_DEVICES: GPU-4db4bbb8-976e-f41a-f8b7-b41bf97a6022
+gpu_id: '0'
+DataParallel: false
+fixed_visual_data_parallel: false
+fixed_visual_device_ids: [0]

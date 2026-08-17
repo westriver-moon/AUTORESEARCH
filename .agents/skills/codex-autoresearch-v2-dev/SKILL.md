@@ -1,60 +1,40 @@
 ---
 name: codex-autoresearch-v2-dev
-description: "Develop, repair, validate, or package the codex-autoresearch-v2 skill and remote-first runtime. Use when the user explicitly asks to change the autoresearch skill, runtime scripts, mode guard, tests, or versioned plugin package; this is the only autoresearch mode that may modify sealed implementation paths."
+description: "Develop, repair, validate, or package Autoresearch v2. Use for changes to its skills, remote runtime/access layer, guard, tests, policy, or plugin; only this mode may edit sealed implementation paths."
 ---
 
 # codex-autoresearch-v2-dev
 
-Use this skill in development mode for the autoresearch v2 implementation.
+Use this skill in development mode.
 
-## Development Contract
+## Rules
 
 - Keep `$codex-autoresearch-v2` as the invocation-only skill.
-- Modify sealed implementation paths only when the user asks for development,
-  repair, validation, packaging, or policy changes.
+- Treat `.codex/research-policy.json` as the sole authority for modes, sealed
+  paths, mutable inputs, and plugin version; do not duplicate its lists.
 - Keep the invocation/runtime interface stable unless the user asks to change it.
 - Update tests when changing mode boundaries, guard behavior, or package layout.
-- Run the mode guard in `develop` mode before final validation when sealed paths
-  were touched.
+- Edit canonical sources, never generated files under
+  `plugins/codex-autoresearch-v2`.
 
-## Sealed Paths
+## Verify and package
 
-Development mode may edit these paths; invocation mode may not:
-
-- `.agents/skills/codex-autoresearch-v2/**`
-- `scripts/remote/guard-autoresearch-mode.ps1`
-- `scripts/remote/autoresearch-v2.ps1`
-- `scripts/remote/smoke-autoresearch-v2.ps1`
-- `scripts/remote/lib/common.ps1`
-- `scripts/remote/lib/ssh.ps1`
-- `scripts/remote/lib/result.ps1`
-- `scripts/remote/lib/paths.ps1`
-- `scripts/remote/lib/autoresearch_v2.ps1`
-- `scripts/remote/remote-bin/autoresearch_v2_*.py`
-- `scripts/remote/remote-bin/run_autoresearch_v2_bridge.sh`
-- `plugins/codex-autoresearch-v2/**`
-
-## Guard
-
-Use the project guard to prove mode intent:
+Before final validation, prove development intent:
 
 ```powershell
 scripts/remote/guard-autoresearch-mode.ps1 -Mode develop -FromGit -Json
 ```
 
-Use invocation mode guard tests to prove sealed paths are rejected:
+When changing boundaries, also prove invocation mode rejects a sealed path:
 
 ```powershell
 scripts/remote/guard-autoresearch-mode.ps1 -Mode invoke -ChangedFile .agents/skills/codex-autoresearch-v2/SKILL.md -Json
 ```
 
-## Package
+Set the release version only at
+`.codex/research-policy.json` at `autoresearch.packaged_plugin.version`, then
+generate and validate the plugin:
 
-The versioned plugin package lives at:
-
-```text
-plugins/codex-autoresearch-v2
+```powershell
+scripts/package-autoresearch-v2-plugin.ps1
 ```
-
-Keep its manifest version aligned with `.codex/research-policy.json` under
-`autoresearch.packaged_plugin.version`.

@@ -134,6 +134,31 @@ def ensure_list(value: Any, label: str) -> list[Any]:
     return value
 
 
+def ensure_optional_list(value: Any, label: str) -> list[Any]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise AutoresearchV2Error(f"{label} must be a list.")
+    return value
+
+
+def ensure_relative_path(value: Any, label: str) -> str:
+    text = ensure_string(value, label).replace("\\", "/")
+    path = PurePosixPath(text)
+    if path.is_absolute() or ".." in path.parts:
+        raise AutoresearchV2Error(f"{label} must be a contained relative path.")
+    return text
+
+
+def ensure_finite_number(value: Any, label: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise AutoresearchV2Error(f"{label} must be a JSON number.")
+    result = float(value)
+    if not math.isfinite(result):
+        raise AutoresearchV2Error(f"{label} must be finite.")
+    return result
+
+
 def load_program_spec(path: Path) -> dict[str, Any]:
     raw = parse_markdown_front_matter(path)
     direction = ensure_string(raw.get("direction"), "program.direction")
@@ -159,37 +184,59 @@ def load_target_spec(path: Path) -> dict[str, Any]:
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
     if not isinstance(raw, dict):
         raise AutoresearchV2Error("target YAML must decode to a mapping.")
+    if raw.get("schema_version") != 2:
+        raise AutoresearchV2Error("unsupported-schema: target schema_version must be integer 2.")
     repo = ensure_mapping(raw.get("repo"), "target.repo")
     run = ensure_mapping(raw.get("run"), "target.run")
-    metric = ensure_mapping(run.get("metric"), "target.run.metric")
+    metric = ensure_mapping(raw.get("metric"), "target.metric")
     gpu = ensure_mapping(raw.get("gpu") or {}, "target.gpu")
-    training = ensure_mapping(raw.get("training") or {}, "target.training")
+    provenance = ensure_mapping(raw.get("provenance") or {}, "target.provenance")
+    direction = ensure_string(metric.get("direction"), "target.metric.direction")
+    if direction not in {"higher", "lower"}:
+        raise AutoresearchV2Error("target.metric.direction must be 'higher' or 'lower'.")
+    budget_minutes = run.get("budget_minutes", 30)
+    if isinstance(budget_minutes, bool) or not isinstance(budget_minutes, int) or budget_minutes < 1:
+        raise AutoresearchV2Error("target.run.budget_minutes must be a positive integer.")
+    environment = ensure_mapping(run.get("env") or {}, "target.run.env")
+    gpu_mode = str(gpu.get("mode") or "none")
+    if gpu_mode not in {"none", "lease"}:
+        raise AutoresearchV2Error("target.gpu.mode must be 'none' or 'lease'.")
+    metric_path = ensure_relative_path(metric.get("path") or "metrics.json", "target.metric.path")
+    primary_key = str(metric.get("primary_key") or "primary_metric")
+    if primary_key != "primary_metric":
+        raise AutoresearchV2Error("target.metric.primary_key must be 'primary_metric' in schema_version 2.")
     return {
+        "schema_version": 2,
         "name": ensure_string(raw.get("name"), "target.name"),
         "repo": {
-            "remote_root": ensure_string(repo.get("remote_root"), "target.repo.remote_root"),
-            "base_ref": ensure_string(repo.get("base_ref"), "target.repo.base_ref"),
+            "path": ensure_string(repo.get("path"), "target.repo.path"),
+            "base_ref": ensure_string(repo.get("base_ref") or "HEAD", "target.repo.base_ref"),
             "mutable_paths": [str(item) for item in ensure_list(repo.get("mutable_paths"), "target.repo.mutable_paths")],
-            "readonly_paths": [str(item) for item in repo.get("readonly_paths", [])],
+            "readonly_paths": [str(item) for item in ensure_optional_list(repo.get("readonly_paths"), "target.repo.readonly_paths")],
         },
         "run": {
-            "cwd": str(run.get("cwd") or "."),
-            "command": [ensure_string(item, "target.run.command") for item in ensure_list(run.get("command"), "target.run.command")],
-            "budget_minutes": {str(key): int(value) for key, value in dict(run.get("budget_minutes") or {}).items()},
-            "metric": {
-                "parser": ensure_string(metric.get("parser"), "target.run.metric.parser"),
-                "direction": ensure_string(metric.get("direction"), "target.run.metric.direction"),
-                "path": str(metric.get("path") or "metrics.json"),
-                "primary_key": str(metric.get("primary_key") or "primary_metric"),
-            },
-            "environment": {str(key): str(value) for key, value in dict(run.get("environment") or {}).items()},
+            "cwd": ensure_relative_path(run.get("cwd") or ".", "target.run.cwd"),
+            "argv": [ensure_string(item, "target.run.argv") for item in ensure_list(run.get("argv"), "target.run.argv")],
+            "budget_minutes": budget_minutes,
+            "env": {ensure_string(key, "target.run.env key"): ensure_string(value, f"target.run.env.{key}") for key, value in environment.items()},
         },
-        "artifacts": {
-            "collect": [str(item) for item in (raw.get("artifacts") or {}).get("collect", [])],
+        "metric": {
+            "direction": direction,
+            "path": metric_path,
+            "primary_key": primary_key,
         },
-        "training": {str(key): str(value) for key, value in training.items()},
+        "artifacts": [
+            ensure_relative_path(item, "target.artifacts")
+            for item in ensure_optional_list(raw.get("artifacts"), "target.artifacts")
+        ],
+        "provenance": {
+            "inputs": [
+                ensure_relative_path(item, "target.provenance.inputs")
+                for item in ensure_optional_list(provenance.get("inputs"), "target.provenance.inputs")
+            ],
+        },
         "gpu": {
-            "policy": str(gpu.get("policy") or "none"),
+            "mode": gpu_mode,
             "selector": str(gpu.get("selector") or "0"),
             "max_wait_seconds": int(gpu.get("max_wait_seconds") or 0),
         },
@@ -302,17 +349,6 @@ def reset_worktree(worktree_root: Path, commit: str) -> None:
 
 def current_branch(worktree_root: Path) -> str:
     return git(worktree_root, "rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
-
-
-def replace_tokens(template: str, mapping: dict[str, Any]) -> str:
-    text = template
-    for key, value in mapping.items():
-        text = text.replace("{" + key + "}", str(value))
-    return text
-
-
-def render_command(tokens: list[str], mapping: dict[str, Any]) -> list[str]:
-    return [replace_tokens(token, mapping) for token in tokens]
 
 
 def worker_name(index: int) -> str:

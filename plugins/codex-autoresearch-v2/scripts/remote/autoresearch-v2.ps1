@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("deploy", "doctor", "bootstrap", "inspect", "apply", "baseline", "run", "resume", "status", "collect", "stop", "sync-best")]
+    [ValidateSet("access-doctor", "access-ensure", "deploy", "doctor", "bootstrap", "inspect", "apply", "baseline", "run", "resume", "status", "collect", "stop", "sync-best")]
     [string] $Mode,
     [string] $RunTag = "",
     [string] $ProgramPath = "",
@@ -14,6 +14,7 @@ param(
     [string] $KeepThreshold = "",
     [string] $SimulateMetric = "",
     [switch] $Foreground,
+    [string] $RemoteProfile = "",
     [string] $RemoteHost = "",
     [string] $SshConfigPath = "",
     [switch] $Json
@@ -24,23 +25,36 @@ $ErrorActionPreference = "Stop"
 
 $remoteScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $remoteScriptRoot "lib\common.ps1")
-. (Join-Path $remoteScriptRoot "lib\ssh.ps1")
-. (Join-Path $remoteScriptRoot "lib\result.ps1")
+. (Join-Path $remoteScriptRoot "lib\config.ps1")
+. (Join-Path $remoteScriptRoot "lib\remote_access.ps1")
 . (Join-Path $remoteScriptRoot "lib\autoresearch_v2.ps1")
 
 $projectRoot = Get-ProjectRoot -RemoteScriptRoot $remoteScriptRoot
-$remoteConfig = Get-RemoteConfig -ProjectRoot $projectRoot
-if (-not [string]::IsNullOrWhiteSpace($RemoteHost)) { $remoteConfig.RemoteHost = $RemoteHost }
-if (-not [string]::IsNullOrWhiteSpace($SshConfigPath)) { $remoteConfig.SshConfigPath = $SshConfigPath }
-$v2Config = Get-AutoresearchV2Config -ProjectRoot $projectRoot
+$enableProfileSelection = [string]::IsNullOrWhiteSpace($RemoteHost)
+$remoteAccess = Get-AutoresearchRemoteAccess `
+    -ProjectRoot $projectRoot `
+    -RemoteProfile $RemoteProfile `
+    -RemoteHost $RemoteHost `
+    -SshConfigPath $SshConfigPath `
+    -AllowInteractiveProfileSelection:$enableProfileSelection
+$selectedRemoteProfile = if ($remoteAccess.ContainsKey("SelectedRemoteProfile")) {
+    [string] $remoteAccess.SelectedRemoteProfile
+} else {
+    ""
+}
+$v2Config = Get-AutoresearchV2Config `
+    -ProjectRoot $projectRoot `
+    -RemoteProfile $selectedRemoteProfile
+$contractValidator = Join-Path $projectRoot ".agents\skills\codex-autoresearch-v2\scripts\autoresearch_v2_contracts.py"
 
 if ([string]::IsNullOrWhiteSpace($RunTag)) {
-    if ($Mode -in @("deploy", "doctor")) {
+    if ($Mode -in @("access-doctor", "access-ensure", "deploy", "doctor")) {
         $RunTag = "doctor"
     } else {
         throw "RunTag is required for mode $Mode."
     }
 }
+Assert-AutoresearchRunTag -RunTag $RunTag
 
 $localRunDir = Ensure-AutoresearchV2LocalRunDir -ProjectRoot $projectRoot -Config $v2Config -RunTag $RunTag
 $localRemoteDir = Join-Path $localRunDir "remote"
@@ -99,33 +113,43 @@ function Complete-V2BridgeResult {
 
 try {
     switch ($Mode) {
+        "access-doctor" {
+            $accessResult = Test-AutoresearchRemoteAccess -Access $remoteAccess
+            Write-V2Status -Name "access-doctor" -Ok ([bool] $accessResult.ok) -Details @{
+                remote_access = $accessResult.details
+            }
+            if (-not $accessResult.ok) { exit 1 }
+            break
+        }
+        "access-ensure" {
+            $accessResult = Ensure-AutoresearchRemoteAccess -Access $remoteAccess
+            Write-V2Status -Name "access-ensure" -Ok ([bool] $accessResult.ok) -Details @{
+                remote_access = $accessResult.details
+            }
+            if (-not $accessResult.ok) { exit 1 }
+            break
+        }
         "deploy" {
             $remoteBinDir = Get-PosixParentPath -PathValue ([string] $v2Config.RemoteBridgeEntry)
-            Ensure-RemoteDirectory -RemoteConfig $remoteConfig -RemotePath $remoteBinDir
+            Ensure-RemoteDirectory -RemoteAccess $remoteAccess -RemotePath $remoteBinDir
             $files = @(
                 "run_autoresearch_v2_bridge.sh",
                 "autoresearch_v2_driver.py",
                 "autoresearch_v2_common.py",
-                "autoresearch_v2_gpu_lease.py",
-                "autoresearch_v2_metric_tvilfm.py"
+                "autoresearch_v2_gpu_lease.py"
             )
             $uploaded = @()
             foreach ($name in $files) {
                 $localPath = Join-Path (Join-Path $remoteScriptRoot "remote-bin") $name
                 $remotePath = $remoteBinDir.TrimEnd("/") + "/" + $name
-                Invoke-RemoteScpTo `
-                    -RemoteHost ([string] $remoteConfig.RemoteHost) `
-                    -SshConfigPath ([string] $remoteConfig.SshConfigPath) `
+                Copy-AutoresearchToRemote `
+                    -Access $remoteAccess `
                     -LocalPath $localPath `
                     -RemotePath $remotePath | Out-Null
                 $uploaded += $remotePath
             }
             $chmodCommand = "bash -lc " + (Quote-PosixSingle ("chmod 700 " + (Quote-PosixSingle ([string] $v2Config.RemoteBridgeEntry))))
-            Invoke-RemoteSsh `
-                -RemoteHost ([string] $remoteConfig.RemoteHost) `
-                -SshConfigPath ([string] $remoteConfig.SshConfigPath) `
-                -ConnectTimeoutSec ([int] $remoteConfig.ConnectTimeoutSec) `
-                -RemoteCommand $chmodCommand | Out-Null
+            Invoke-AutoresearchRemoteCommand -Access $remoteAccess -RemoteCommand $chmodCommand | Out-Null
             Write-V2Status -Name "deploy" -Ok $true -Details @{
                 remote_bridge = [string] $v2Config.RemoteBridgeEntry
                 uploaded = $uploaded
@@ -133,18 +157,35 @@ try {
             break
         }
         "doctor" {
+            $targetCandidate = if ([string]::IsNullOrWhiteSpace($TargetPath)) { [string] $v2Config.TargetPath } else { $TargetPath }
+            if ([string]::IsNullOrWhiteSpace($targetCandidate)) {
+                throw "TargetPath is required for doctor."
+            }
+            $targetFull = Resolve-AutoresearchV2LocalPath -ProjectRoot $projectRoot -PathValue $targetCandidate
+            $null = Invoke-AutoresearchContractValidation -ScriptPath $contractValidator -Command validate-target -InputPath $targetFull
+            $remoteDoctorRoot = ([string] $v2Config.RemoteControllerRoot).TrimEnd("/") + "/uploads/" + $RunTag + "/doctor"
+            $remoteDoctorTarget = $remoteDoctorRoot + "/target.yaml"
+            Ensure-RemoteDirectory -RemoteAccess $remoteAccess -RemotePath $remoteDoctorRoot
+            Copy-AutoresearchToRemote `
+                -Access $remoteAccess `
+                -LocalPath $targetFull `
+                -RemotePath $remoteDoctorTarget | Out-Null
             $result = Invoke-AutoresearchV2Bridge `
-                -RemoteConfig $remoteConfig `
+                -RemoteAccess $remoteAccess `
                 -V2Config $v2Config `
                 -Arguments @(
                     "--run-root-base", [string] $v2Config.RemoteRunRoot,
                     "--worktree-root-base", [string] $v2Config.RemoteWorktreeRoot,
                     "--lease-root", [string] $v2Config.RemoteLeaseRoot,
                     "--run-tag", $RunTag,
-                    "doctor"
+                    "doctor",
+                    "--target", $remoteDoctorTarget
                 ) `
                 -AllowFailure
-            Complete-V2BridgeResult -Name "doctor" -Result $result
+            Complete-V2BridgeResult -Name "doctor" -Result $result -Details @{
+                target = $targetFull
+                remote_target = $remoteDoctorTarget
+            }
             break
         }
         default {
@@ -158,22 +199,18 @@ try {
                 $targetCandidate = if ([string]::IsNullOrWhiteSpace($TargetPath)) { [string] $v2Config.TargetPath } else { $TargetPath }
                 $programFull = Resolve-AutoresearchV2LocalPath -ProjectRoot $projectRoot -PathValue $programCandidate
                 $targetFull = Resolve-AutoresearchV2LocalPath -ProjectRoot $projectRoot -PathValue $targetCandidate
-                $programValidator = Join-Path $projectRoot ".agents\skills\codex-autoresearch-v2\scripts\autoresearch_program_validate.py"
-                $targetValidator = Join-Path $projectRoot ".agents\skills\codex-autoresearch-v2\scripts\autoresearch_target_validate.py"
-                $null = Invoke-LocalValidator -ScriptPath $programValidator -InputPath $programFull
-                $null = Invoke-LocalValidator -ScriptPath $targetValidator -InputPath $targetFull
+                $null = Invoke-AutoresearchContractValidation -ScriptPath $contractValidator -Command validate-program -InputPath $programFull
+                $null = Invoke-AutoresearchContractValidation -ScriptPath $contractValidator -Command validate-target -InputPath $targetFull
                 $remoteUploadSpecRoot = ([string] $v2Config.RemoteControllerRoot).TrimEnd("/") + "/uploads/" + $RunTag + "/spec"
-                Ensure-RemoteDirectory -RemoteConfig $remoteConfig -RemotePath $remoteUploadSpecRoot
+                Ensure-RemoteDirectory -RemoteAccess $remoteAccess -RemotePath $remoteUploadSpecRoot
                 $remoteUploadProgram = $remoteUploadSpecRoot + "/program.md"
                 $remoteUploadTarget = $remoteUploadSpecRoot + "/target.yaml"
-                Invoke-RemoteScpTo `
-                    -RemoteHost ([string] $remoteConfig.RemoteHost) `
-                    -SshConfigPath ([string] $remoteConfig.SshConfigPath) `
+                Copy-AutoresearchToRemote `
+                    -Access $remoteAccess `
                     -LocalPath $programFull `
                     -RemotePath $remoteUploadProgram | Out-Null
-                Invoke-RemoteScpTo `
-                    -RemoteHost ([string] $remoteConfig.RemoteHost) `
-                    -SshConfigPath ([string] $remoteConfig.SshConfigPath) `
+                Copy-AutoresearchToRemote `
+                    -Access $remoteAccess `
                     -LocalPath $targetFull `
                     -RemotePath $remoteUploadTarget | Out-Null
                 $effectiveWorkers = if ($WorkerCount -gt 0) { $WorkerCount } else { [int] $v2Config.DefaultWorkerCount }
@@ -190,7 +227,7 @@ try {
                     "--worker-count", [string] $effectiveWorkers,
                     "--keep-threshold", [string] $effectiveThreshold
                 )
-                $result = Invoke-AutoresearchV2Bridge -RemoteConfig $remoteConfig -V2Config $v2Config -Arguments $argsList -AllowFailure
+                $result = Invoke-AutoresearchV2Bridge -RemoteAccess $remoteAccess -V2Config $v2Config -Arguments $argsList -AllowFailure
                 Complete-V2BridgeResult -Name "bootstrap" -Result $result -Details @{
                     program = $programFull
                     target = $targetFull
@@ -199,11 +236,11 @@ try {
                 break
             }
 
-            Ensure-RemoteDirectory -RemoteConfig $remoteConfig -RemotePath $remoteSpecRoot
+            Ensure-RemoteDirectory -RemoteAccess $remoteAccess -RemotePath $remoteSpecRoot
 
             switch ($Mode) {
                 "inspect" {
-                    $result = Invoke-AutoresearchV2Bridge -RemoteConfig $remoteConfig -V2Config $v2Config -Arguments @(
+                    $result = Invoke-AutoresearchV2Bridge -RemoteAccess $remoteAccess -V2Config $v2Config -Arguments @(
                         "--run-root-base", [string] $v2Config.RemoteRunRoot,
                         "--worktree-root-base", [string] $v2Config.RemoteWorktreeRoot,
                         "--lease-root", [string] $v2Config.RemoteLeaseRoot,
@@ -222,9 +259,8 @@ try {
                         if (-not [string]::IsNullOrWhiteSpace($localInspectParent)) {
                             New-Item -ItemType Directory -Force -Path $localInspectParent | Out-Null
                         }
-                        Invoke-RemoteScpFrom `
-                            -RemoteHost ([string] $remoteConfig.RemoteHost) `
-                            -SshConfigPath ([string] $remoteConfig.SshConfigPath) `
+                        Copy-AutoresearchFromRemote `
+                            -Access $remoteAccess `
                             -RemotePath ([string] $payload.export_root) `
                             -LocalPath $localInspect `
                             -Recurse | Out-Null
@@ -238,11 +274,10 @@ try {
                     }
                     $sourceFull = Resolve-Path -LiteralPath $SourcePath
                     $remoteUploadParent = $remoteRunRoot + "/uploads/" + $Worker
-                    Ensure-RemoteDirectory -RemoteConfig $remoteConfig -RemotePath $remoteUploadParent
+                    Ensure-RemoteDirectory -RemoteAccess $remoteAccess -RemotePath $remoteUploadParent
                     $remoteOverlay = $remoteUploadParent + "/" + [System.IO.Path]::GetFileName($sourceFull.Path)
-                    Invoke-RemoteScpTo `
-                        -RemoteHost ([string] $remoteConfig.RemoteHost) `
-                        -SshConfigPath ([string] $remoteConfig.SshConfigPath) `
+                    Copy-AutoresearchToRemote `
+                        -Access $remoteAccess `
                         -LocalPath $sourceFull.Path `
                         -RemotePath ($remoteUploadParent + "/") `
                         -Recurse:((Get-Item -LiteralPath $sourceFull.Path).PSIsContainer) | Out-Null
@@ -258,7 +293,7 @@ try {
                     if (-not [string]::IsNullOrWhiteSpace($Note)) {
                         $argsList += @("--note", $Note)
                     }
-                    $result = Invoke-AutoresearchV2Bridge -RemoteConfig $remoteConfig -V2Config $v2Config -Arguments $argsList -AllowFailure
+                    $result = Invoke-AutoresearchV2Bridge -RemoteAccess $remoteAccess -V2Config $v2Config -Arguments $argsList -AllowFailure
                     Complete-V2BridgeResult -Name "apply" -Result $result -Details @{
                         source = $sourceFull.Path
                     }
@@ -304,7 +339,7 @@ try {
                         $argsList += @("--worker", $Worker)
                     }
                 }
-                $result = Invoke-AutoresearchV2Bridge -RemoteConfig $remoteConfig -V2Config $v2Config -Arguments $argsList -AllowFailure
+                $result = Invoke-AutoresearchV2Bridge -RemoteAccess $remoteAccess -V2Config $v2Config -Arguments $argsList -AllowFailure
                 $collectResults = $null
                 if ($Mode -eq "collect") {
                     $collectResults = {
@@ -314,9 +349,8 @@ try {
                     if (Test-Path -LiteralPath $localCollectRoot) {
                         Remove-Item -Recurse -Force -LiteralPath $localCollectRoot
                     }
-                    Invoke-RemoteScpFrom `
-                        -RemoteHost ([string] $remoteConfig.RemoteHost) `
-                        -SshConfigPath ([string] $remoteConfig.SshConfigPath) `
+                    Copy-AutoresearchFromRemote `
+                        -Access $remoteAccess `
                         -RemotePath ([string] $payload.run_root) `
                         -LocalPath $localCollectRoot `
                         -Recurse | Out-Null

@@ -1,0 +1,54 @@
+schema_version: 2
+name: salt-ir-to-rgb-text-fusion84-30-sysu
+
+repo:
+  path: /home/lab929/ybj/SALT-VI
+  base_ref: 1e73e4fc0210c9bd9e3514cc8930a5facfa39850
+  mutable_paths:
+    - src/salt_vi/engine/build.py
+    - src/salt_vi/retrieval/registry.py
+    - src/salt_vi/retrieval/ir_to_rgb_text_legacy_triangle.py
+    - src/salt_vi/tests/test_ir_to_rgb_text_plugin.py
+    - configs/experiments/ir_to_rgb_text_fusion84_30/train.yaml
+    - scripts/training/run_ir_to_rgb_text_fusion84_30.py
+  readonly_paths:
+    - checkpoints/**
+    - configs/stage_a/**
+    - configs/stage_b/**
+    - datasets/**
+    - feature_analysis/**
+    - logs/**
+
+run:
+  cwd: .
+  argv:
+    - /home/cgv841/anaconda3/envs/clipreid/bin/python
+    - scripts/training/run_ir_to_rgb_text_fusion84_30.py
+  env:
+    PYTHONDONTWRITEBYTECODE: "1"
+    TOKENIZERS_PARALLELISM: "false"
+  budget_minutes: 1200
+
+metric:
+  path: metrics.json
+  primary_key: primary_metric
+  direction: higher
+
+artifacts:
+  - configs/experiments/ir_to_rgb_text_fusion84_30/train.yaml
+  - scripts/training/run_ir_to_rgb_text_fusion84_30.py
+  - src/salt_vi/retrieval/ir_to_rgb_text_legacy_triangle.py
+
+provenance:
+  inputs:
+    - configs/stage_b/ir_to_rgb_text_20260808.yaml
+    - configs/experiments/ir_to_rgb_text_fusion84_30/train.yaml
+    - scripts/training/run_ir_to_rgb_text_fusion84_30.py
+    - src/salt_vi/engine/build.py
+    - src/salt_vi/retrieval/registry.py
+    - src/salt_vi/retrieval/ir_to_rgb_text_legacy_triangle.py
+
+gpu:
+  mode: lease
+  selector: "3"
+  max_wait_seconds: 900

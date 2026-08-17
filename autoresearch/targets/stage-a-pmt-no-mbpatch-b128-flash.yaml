@@ -1,0 +1,46 @@
+schema_version: 2
+name: stage-a-pmt-no-mbpatch-b128-flash
+
+repo:
+  path: /home/lab929/ybj/SALT-VI
+  base_ref: 5f58fc86949eb8edeba9a103908d441a493eb72c
+  mutable_paths:
+    - configs/stage_a/reproduction/source_core/stage_a_current_best_no_mbpatch_pasd_rgb_ir_geomatched_512x256_1view_b64_flash.yaml
+    - scripts/reproduction/run_stage_a_pmt_no_mbpatch_b64_flash.py
+  readonly_paths:
+    - src/**
+    - checkpoints/**
+    - experiments/**
+    - reports/**
+    - runtime/**
+
+run:
+  cwd: .
+  argv:
+    - /home/lab929/ybj/.conda-envs/salt-vi-flash/bin/python3.9
+    - scripts/reproduction/run_stage_a_pmt_no_mbpatch_b64_flash.py
+  env:
+    PYTHONDONTWRITEBYTECODE: "1"
+    TOKENIZERS_PARALLELISM: "false"
+  budget_minutes: 1440
+
+metric:
+  path: metrics.json
+  primary_key: primary_metric
+  direction: higher
+
+artifacts:
+  - configs/stage_a/reproduction/source_core/stage_a_current_best_no_mbpatch_pasd_rgb_ir_geomatched_512x256_1view_b64_flash.yaml
+  - scripts/reproduction/run_stage_a_pmt_no_mbpatch_b64_flash.py
+
+provenance:
+  inputs:
+    - configs/stage_a/reproduction/source_core/vision_text_encoder_stage_a_current_best.yaml
+    - configs/stage_a/reproduction/source_core/stage_a_current_best_no_mbpatch_pasd_rgb_ir_geomatched_512x256_1view_b32.yaml
+    - configs/stage_a/reproduction/source_core/stage_a_current_best_no_mbpatch_pasd_rgb_ir_geomatched_512x256_1view_b64_flash.yaml
+    - scripts/reproduction/run_stage_a_pmt_no_mbpatch_b64_flash.py
+
+gpu:
+  mode: lease
+  selector: "1,2,3"
+  max_wait_seconds: 900

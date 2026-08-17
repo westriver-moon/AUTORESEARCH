@@ -13,13 +13,19 @@ def _lease_file(root: Path, gpu_id: str) -> Path:
     return root / f"{gpu_id}.json"
 
 
-def _query_gpus() -> list[dict[str, Any]]:
-    completed = subprocess.run(
+def _query_gpus(selector: str = "auto") -> list[dict[str, Any]]:
+    requested = selector.strip().lower()
+    command = ["nvidia-smi"]
+    if requested not in {"", "auto"}:
+        command.extend(["-i", requested])
+    command.extend(
         [
-            "nvidia-smi",
             "--query-gpu=index,memory.used,utilization.gpu",
             "--format=csv,noheader,nounits",
-        ],
+        ]
+    )
+    completed = subprocess.run(
+        command,
         capture_output=True,
         text=True,
         check=False,
@@ -58,7 +64,7 @@ def acquire_gpu_lease(
     requested = selector.strip().lower()
     while True:
         with file_lock(root / ".lock"):
-            gpus = _query_gpus()
+            gpus = _query_gpus(requested)
             candidates = []
             for gpu in gpus:
                 if requested not in {"", "auto"} and gpu["id"] not in requested.split(","):

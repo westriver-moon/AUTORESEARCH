@@ -1,75 +1,31 @@
-# Remote Script Contract
+# Autoresearch v2 Runtime
 
-This directory exposes the supported local entrypoints for server-side research
-automation.
+`autoresearch-v2.ps1` is the single controller for `access-doctor`,
+`access-ensure`, `deploy`, `doctor`, `bootstrap`, `inspect`, `apply`,
+`baseline`, `run`, `resume`, `status`, `collect`, `stop`, and `sync-best`.
 
-## v2 Runtime
+Supporting entrypoints:
 
-```text
-autoresearch-v2.ps1
-  Remote-first controller for:
-  deploy, doctor, bootstrap, inspect, apply, baseline, run, resume,
-  status, collect, stop, sync-best
+- `select-profile.ps1` selects a configured Profile locally. Pass
+  `-NonInteractive` to resolve `ActiveRemoteProfile` without opening the picker,
+  or combine it with `-RemoteProfile <name>` for an explicit validated choice.
+- `smoke-autoresearch-v2.ps1` runs the explicit program/target CPU smoke flow.
+- `guard-autoresearch-mode.ps1` enforces the policy in
+  `.codex/research-policy.json`.
 
-guard-autoresearch-mode.ps1
-  Checks invoke/develop mode boundaries for sealed autoresearch v2 files.
+## Boundaries
 
-smoke-autoresearch-v2.ps1
-  Real-server, non-GPU smoke workflow using the actual git root layout.
-```
+- `lib/config.ps1` loads the public and ignored local configuration.
+- `lib/remote_access.ps1` owns Profile resolution, SSH/SCP, tunnels, and proxy
+  checks. `access-doctor` verifies SSH and, when required, the HTTP proxy;
+  `access-ensure` may start only the configured tunnel helper.
+- `lib/autoresearch_v2.ps1` resolves runtime roots from the selected Profile,
+  allowing different accounts or servers to use different home directories.
+- `lib/autoresearch_v2.ps1` maps controller operations to the remote bridge.
+- `remote-bin/` owns remote worker state, worktrees, leases, retention, and
+  collection.
 
-`autoresearch-v2.ps1` is the only supported autonomous autoresearch runtime in
-this repository.
-
-`config/autoresearch-train.example.psd1` defaults manual training helpers to
-the current Stage A main config and allows optional local epoch inspection.
-
-## Manual Operations
-
-```text
-doctor.ps1               Read-only SSH / proxy / remote-entry health check.
-ensure-connectivity.ps1  Starts the local tunnel helper when needed.
-submit-smoke-test.ps1    Fixed remote smoke / preflight entrypoint.
-submit-job.ps1           Human-confirmed full training entrypoint.
-submit-sampling-mining-ablation.ps1
-                         Manual sampling/mining ablation control wrapper.
-submit-mbpatch-light-ablation.ps1
-                         Manual mbpatch-light ablation control wrapper.
-check-job.ps1            Reads fixed remote status for manual jobs.
-fetch-results.ps1        Fetches approved result files for manual jobs.
-cancel-own-job.ps1       Cancels only the job matching the experiment id.
-sync-code.ps1            Copies a local project path into the remote workspace.
-```
-
-## Runtime Files
-
-```text
-lib/common.ps1
-lib/ssh.ps1
-lib/result.ps1
-lib/training.ps1
-lib/autoresearch_v2.ps1
-
-remote-bin/autoresearch_v2_driver.py
-remote-bin/autoresearch_v2_common.py
-remote-bin/autoresearch_v2_gpu_lease.py
-remote-bin/autoresearch_v2_metric_tvilfm.py
-remote-bin/autoresearch_v2_mode_guard.py
-remote-bin/run_autoresearch_v2_bridge.sh
-remote-bin/run_sampling_mining_ablation_bridge.sh
-remote-bin/run_mbpatch_light_ablation_bridge.sh
-```
-
-## Mode Boundary
-
-Use `$codex-autoresearch-v2` for invocation-only work. Use
-`$codex-autoresearch-v2-dev` for implementation changes. The authoritative
-policy is `.codex/research-policy.json`.
-
-## Remote Layout Assumption
-
-The default v2 target assumes:
-
-- remote git root: `/home/cgv841/ybj`
-- active training code: `TVI-LFM/`
-- remote controller root: `/home/cgv841/ybj/autoresearch-v2`
+The target owns its repository, argv, environment, metric, declared inputs,
+artifacts, and optional lease. The command writes a finite numeric
+`primary_metric` to `$AR2_RESULTS_DIR/metrics.json`; the runtime does not infer
+metrics from stdout or interpret project semantics.

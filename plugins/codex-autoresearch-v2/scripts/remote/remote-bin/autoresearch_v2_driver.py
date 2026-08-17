@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import math
 import os
+import signal
 import shutil
 import subprocess
 import sys
@@ -28,8 +31,6 @@ from autoresearch_v2_common import (
     load_program_spec,
     load_target_spec,
     read_json,
-    render_command,
-    replace_tokens,
     reset_worktree,
     terminate_pid,
     utc_now,
@@ -37,10 +38,9 @@ from autoresearch_v2_common import (
     write_json,
 )
 from autoresearch_v2_gpu_lease import acquire_gpu_lease, release_gpu_lease
-from autoresearch_v2_metric_tvilfm import parse_tvilfm_metric, prepare_tvilfm_config
 
 
-SCHEMA_VERSION = "autoresearch-v2"
+SCHEMA_VERSION = "autoresearch-v2-state-schema-2"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -161,9 +161,7 @@ def worker_export_root(args: argparse.Namespace, worker: str) -> Path:
 def resolve_budget_minutes(state: dict[str, Any], requested: int) -> int:
     if requested > 0:
         return requested
-    budget_mode = str(state["program"]["budget_mode"])
-    budgets = dict(state["target"]["run"].get("budget_minutes") or {})
-    return int(budgets.get(budget_mode) or budgets.get("medium") or 30)
+    return int(state["target"]["run"]["budget_minutes"])
 
 
 def load_state(args: argparse.Namespace) -> dict[str, Any]:
@@ -282,7 +280,7 @@ def git_commit_if_needed(worktree: Path, changed_files: list[str], message: str)
 
 def bootstrap(args: argparse.Namespace) -> dict[str, Any]:
     root = run_root(args)
-    if root.exists() and not args.force:
+    if root.exists() and any(root.iterdir()) and not args.force:
         raise AutoresearchV2Error(f"run root already exists: {root}")
     root.mkdir(parents=True, exist_ok=True)
 
@@ -290,8 +288,8 @@ def bootstrap(args: argparse.Namespace) -> dict[str, Any]:
     target_path = Path(args.target)
     program = load_program_spec(program_path)
     target = load_target_spec(target_path)
-    if program["direction"] != target["run"]["metric"]["direction"]:
-        raise AutoresearchV2Error("program.direction must match target.run.metric.direction")
+    if program["direction"] != target["metric"]["direction"]:
+        raise AutoresearchV2Error("program.direction must match target.metric.direction")
 
     spec_dir = root / "spec"
     spec_dir.mkdir(parents=True, exist_ok=True)
@@ -300,7 +298,7 @@ def bootstrap(args: argparse.Namespace) -> dict[str, Any]:
     shutil.copy2(program_path, program_snapshot)
     shutil.copy2(target_path, target_snapshot)
 
-    repo_root = Path(target["repo"]["remote_root"])
+    repo_root = Path(target["repo"]["path"])
     base_ref = target["repo"]["base_ref"]
     if not (repo_root / ".git").exists():
         raise AutoresearchV2Error(f"target repo is not a git repository: {repo_root}")
@@ -354,7 +352,6 @@ def bootstrap(args: argparse.Namespace) -> dict[str, Any]:
         "updated_at": utc_now(),
     }
     save_state(args, state)
-    append_jsonl(events_path(args), {"timestamp": utc_now(), "event": "bootstrap", "run_tag": args.run_tag})
     return {
         "ok": True,
         "command": "bootstrap",
@@ -380,7 +377,6 @@ def inspect_worker(args: argparse.Namespace) -> dict[str, Any]:
         "export_root": str(export_root),
         "files": copied,
     }
-    append_jsonl(events_path(args), {"timestamp": utc_now(), "event": "inspect", "worker": worker, "file_count": len(copied)})
     return payload
 
 
@@ -411,7 +407,6 @@ def apply_overlay(args: argparse.Namespace) -> dict[str, Any]:
             note=args.note or ("applied overlay" if changed else "overlay produced no diff"),
         )
         save_state(args, latest)
-    append_jsonl(events_path(args), {"timestamp": utc_now(), "event": "apply", "worker": worker, "changed": changed})
     return {
         "ok": True,
         "command": "apply",
@@ -515,36 +510,163 @@ def launch_workers(
             update_worker_status(latest, name, status="running", pid=proc.pid, trial_id=trial_id, note=f"{phase} running")
             save_state(args, latest)
         started.append({"worker": name, "status": "started", "pid": proc.pid, "trial_id": trial_id})
-    append_jsonl(events_path(args), {"timestamp": utc_now(), "event": phase, "started": started})
     return {"ok": True, "command": phase, "workers": started, "budget_minutes": budget}
 
 
-def measure_metric(state: dict[str, Any], run_dir: Path, run_output_dir: Path, simulate_metric: float | None) -> tuple[float, dict[str, Any]]:
-    primary_key = str(state["target"]["run"]["metric"]["primary_key"])
-    if simulate_metric is not None:
-        payload = {
-            "available": True,
-            "schema_version": "simulated-metric-v1",
-            "primary_metric": float(simulate_metric),
-            primary_key: float(simulate_metric),
-        }
-        write_json(run_dir / "results" / "metrics.json", payload)
-        return float(simulate_metric), payload
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while chunk := handle.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
 
-    parser_name = str(state["target"]["run"]["metric"]["parser"])
-    results_dir = run_dir / "results"
-    if parser_name == "tvilfm_reid":
-        payload = parse_tvilfm_metric(run_output_dir, results_dir)
-    elif parser_name == "json_file":
-        metric_file = results_dir / str(state["target"]["run"]["metric"]["path"])
-        payload = json.loads(metric_file.read_text(encoding="utf-8"))
-    else:
-        raise AutoresearchV2Error(f"unsupported metric parser: {parser_name}")
-    if not payload.get("available", True):
-        raise AutoresearchV2Error(f"metric parser reported unavailable metric: {payload}")
-    if primary_key not in payload:
-        raise AutoresearchV2Error(f"metric payload is missing primary key {primary_key!r}")
-    return float(payload[primary_key]), payload
+
+def contained_path(root: Path, relative_path: str, label: str) -> Path:
+    candidate = (root / relative_path).resolve()
+    try:
+        candidate.relative_to(root.resolve())
+    except ValueError as exc:
+        raise AutoresearchV2Error(f"{label} escapes its allowed root: {relative_path}") from exc
+    return candidate
+
+
+def expand_runtime_value(value: str, runtime_values: dict[str, str]) -> str:
+    expanded = value
+    for key, replacement in runtime_values.items():
+        expanded = expanded.replace("${" + key + "}", replacement)
+    return expanded
+
+
+def input_record(worker_root: Path, declared_path: str) -> dict[str, Any]:
+    path = contained_path(worker_root, declared_path, "provenance input")
+    if not path.exists():
+        raise AutoresearchV2Error(f"declared provenance input does not exist: {declared_path}")
+    if path.is_file():
+        return {"path": declared_path, "kind": "file", "size": path.stat().st_size, "sha256": sha256_file(path)}
+    if not path.is_dir():
+        raise AutoresearchV2Error(f"unsupported provenance input type: {declared_path}")
+    files: list[dict[str, Any]] = []
+    for child in sorted(path.rglob("*")):
+        if not child.is_file():
+            continue
+        resolved = child.resolve()
+        try:
+            resolved.relative_to(worker_root.resolve())
+        except ValueError as exc:
+            raise AutoresearchV2Error(f"provenance input symlink escapes worker root: {child}") from exc
+        files.append({"path": resolved.relative_to(worker_root.resolve()).as_posix(), "size": resolved.stat().st_size, "sha256": sha256_file(resolved)})
+    aggregate = hashlib.sha256(json.dumps(files, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+    return {"path": declared_path, "kind": "directory", "sha256": aggregate, "files": files}
+
+
+def environment_summary(environment: dict[str, str], runtime_keys: list[str]) -> dict[str, Any]:
+    declared = {key: hashlib.sha256(value.encode("utf-8")).hexdigest() for key, value in sorted(environment.items())}
+    return {"declared_value_sha256": declared, "runtime_keys": sorted(runtime_keys)}
+
+
+def collect_declared_artifacts(worker_root: Path, run_dir: Path, patterns: list[str]) -> list[dict[str, Any]]:
+    destination_root = run_dir / "declared_artifacts"
+    records: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for pattern in patterns:
+        normalized = pattern.replace("\\", "/")
+        if normalized.startswith("/") or ".." in Path(normalized).parts:
+            raise AutoresearchV2Error(f"artifact pattern escapes worker root: {pattern}")
+        for source in sorted(worker_root.glob(normalized)):
+            if not source.is_file():
+                continue
+            resolved = source.resolve()
+            try:
+                relative = resolved.relative_to(worker_root.resolve())
+            except ValueError as exc:
+                raise AutoresearchV2Error(f"artifact symlink escapes worker root: {source}") from exc
+            relative_text = relative.as_posix()
+            if relative_text in seen:
+                continue
+            seen.add(relative_text)
+            destination = destination_root / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(resolved, destination)
+            records.append({"path": relative_text, "archive_path": destination.relative_to(run_dir).as_posix(), "size": destination.stat().st_size, "sha256": sha256_file(destination)})
+    return records
+
+
+def run_process_tree(command: list[str], cwd: Path, env: dict[str, str], log_path: Path, timeout_seconds: int) -> tuple[int | None, bool]:
+    with log_path.open("w", encoding="utf-8") as log_handle:
+        process = subprocess.Popen(command, cwd=cwd, env=env, stdout=log_handle, stderr=subprocess.STDOUT, start_new_session=True)
+        try:
+            return process.wait(timeout=timeout_seconds), False
+        except subprocess.TimeoutExpired:
+            if os.name == "nt":
+                try:
+                    import psutil
+
+                    psutil_available = True
+                except ImportError:
+                    psutil_available = False
+                if psutil_available:
+                    try:
+                        root_process = psutil.Process(process.pid)
+                        descendants = root_process.children(recursive=True)
+                        for descendant in reversed(descendants):
+                            descendant.kill()
+                        root_process.kill()
+                        psutil.wait_procs([*descendants, root_process], timeout=5)
+                    except psutil.Error:
+                        psutil_available = False
+                if not psutil_available:
+                    subprocess.run(
+                        ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        timeout=10,
+                        check=False,
+                    )
+            else:
+                try:
+                    os.killpg(process.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    process.wait(timeout=5)
+            return None, True
+
+
+def measure_metric(state: dict[str, Any], run_dir: Path, simulate_metric: float | None) -> tuple[float, dict[str, Any]]:
+    results_dir = (run_dir / "results").resolve()
+    metric_path = contained_path(results_dir, str(state["target"]["metric"]["path"]), "metric.path")
+    if simulate_metric is not None:
+        write_json(metric_path, {"primary_metric": float(simulate_metric)})
+    if not metric_path.is_file():
+        raise AutoresearchV2Error(f"metrics file was not created: {metric_path}")
+    payload = json.loads(metric_path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise AutoresearchV2Error("metrics file must contain a JSON object")
+    value = payload.get("primary_metric")
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(float(value)):
+        raise AutoresearchV2Error("primary_metric must be a finite JSON number")
+    optional = payload.get("metrics", {})
+    if optional is None:
+        optional = {}
+    if not isinstance(optional, dict):
+        raise AutoresearchV2Error("metrics must be a mapping when provided")
+    normalized_metrics: dict[str, float] = {}
+    for key, item in optional.items():
+        if not isinstance(key, str) or not key:
+            raise AutoresearchV2Error("metrics keys must be non-empty strings")
+        if isinstance(item, bool) or not isinstance(item, (int, float)) or not math.isfinite(float(item)):
+            raise AutoresearchV2Error(f"metrics.{key} must be a finite JSON number")
+        normalized_metrics[key] = float(item)
+    normalized: dict[str, Any] = {"primary_metric": float(value)}
+    if normalized_metrics:
+        normalized["metrics"] = normalized_metrics
+    return float(value), normalized
 
 
 def trial_is_logged(path: Path, trial_id: str) -> bool:
@@ -558,21 +680,6 @@ def trial_is_logged(path: Path, trial_id: str) -> bool:
         return False
     index = header.index("trial_id")
     return any(len(row := line.split("\t")) > index and row[index] == trial_id for line in lines[1:])
-
-
-def event_is_logged(path: Path, trial_id: str) -> bool:
-    if not path.exists():
-        return False
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if payload.get("event") == "trial-outcome" and payload.get("trial_id") == trial_id:
-            return True
-    return False
 
 
 def record_trial_outcome(args: argparse.Namespace, outcome: dict[str, Any]) -> None:
@@ -589,8 +696,6 @@ def record_trial_outcome(args: argparse.Namespace, outcome: dict[str, Any]) -> N
     trial_id = str(authoritative["trial_id"])
     if not trial_is_logged(results_path(args), trial_id):
         append_results_row(results_path(args), authoritative)
-    if not event_is_logged(events_path(args), trial_id):
-        append_jsonl(events_path(args), {"event": "trial-outcome", **authoritative})
 
 
 def build_trial_outcome(
@@ -658,13 +763,14 @@ def run_worker_once(
 
     lease = None
     selected_gpu = ""
+    artifact_records: list[dict[str, Any]] = []
     completion_reason = "completed"
     process_exit_code: int | None = None
     timed_out = False
     metric_extracted = False
     metric_payload: dict[str, Any] = {}
     try:
-        gpu_policy = str(state["target"]["gpu"].get("policy") or "none")
+        gpu_policy = str(state["target"]["gpu"].get("mode") or "none")
         selector = str(state["target"]["gpu"].get("selector") or "0")
         wait_seconds = int(state["target"]["gpu"].get("max_wait_seconds") or 0)
         if gpu_policy == "lease":
@@ -675,65 +781,51 @@ def run_worker_once(
                 wait_seconds=wait_seconds,
             )
             selected_gpu = str(lease["gpu"])
-        else:
-            selected_gpu = selector
+        target = state["target"]
+        runtime_values = {
+            "AR2_WORKER_ROOT": str(worker_root),
+            "AR2_RUN_DIR": str(run_dir),
+            "AR2_OUTPUT_DIR": str(run_output_dir),
+            "AR2_RESULTS_DIR": str(run_results_dir),
+            "AR2_BUDGET_MINUTES": str(budget_minutes),
+        }
+        if lease is not None:
+            runtime_values["AR2_GPU_ID"] = selected_gpu
+        declared_env = {str(key): expand_runtime_value(str(value), runtime_values) for key, value in dict(target["run"].get("env") or {}).items()}
+        command = [expand_runtime_value(str(token), runtime_values) for token in list(target["run"]["argv"])]
+        unresolved = [value for value in command + list(declared_env.values()) if "${AR2_" in value]
+        if unresolved:
+            raise AutoresearchV2Error(f"unavailable runtime placeholder in target: {unresolved[0]}")
+        env = os.environ.copy()
+        env.update(declared_env)
+        env.update(runtime_values)
+        cwd = contained_path(worker_root, str(target["run"].get("cwd") or "."), "run.cwd")
+        if not cwd.is_dir():
+            raise AutoresearchV2Error(f"run.cwd is not a directory: {cwd}")
+        input_records = [input_record(worker_root, path) for path in list(target.get("provenance", {}).get("inputs") or [])]
+        runtime_files = [Path(__file__).resolve(), Path(__file__).with_name("autoresearch_v2_common.py")]
+        provenance = {
+            "schema_version": 2,
+            "created_at": utc_now(),
+            "program": {"path": state["program_snapshot"], "sha256": sha256_file(Path(state["program_snapshot"]))},
+            "target": {"path": state["target_snapshot"], "sha256": sha256_file(Path(state["target_snapshot"]))},
+            "source": {"commit": head_commit, "status": git(worker_root, "status", "--porcelain", "--untracked-files=all").stdout.splitlines()},
+            "command": {"argv": command, "cwd": str(cwd)},
+            "environment": environment_summary(declared_env, list(runtime_values)),
+            "inputs": input_records,
+            "runtime": [{"name": path.name, "sha256": sha256_file(path)} for path in runtime_files],
+            "resource": {"mode": gpu_policy, **({"id": selected_gpu} if lease is not None else {})},
+        }
+        write_json(run_dir / "provenance.json", provenance)
+        write_json(run_dir / "command.json", {"argv": command, "cwd": str(cwd)})
+        append_jsonl(events_path(args), {"timestamp": utc_now(), "event": "run_started", "worker": worker, "trial_id": trial_id, "phase": phase})
 
         if simulate_metric is None:
-            target = state["target"]
-            training = dict(target.get("training") or {})
-            env = os.environ.copy()
-            env.update({str(key): str(value) for key, value in dict(target["run"].get("environment") or {}).items()})
-            python_bin = training.get("python_bin") or sys.executable
-            prepared_config_path = run_dir / "config_used.yaml"
-            source_config = Path(training.get("config_path") or "")
-            if target["run"]["metric"]["parser"] == "tvilfm_reid":
-                prepare_tvilfm_config(
-                    source_config=source_config,
-                    destination_config=prepared_config_path,
-                    run_output_dir=run_output_dir,
-                    data_root=str(training.get("data_root") or ""),
-                    pretrained=str(training.get("pretrained") or ""),
-                    gpu=selected_gpu or "0",
-                )
-            mapping = {
-                "python_bin": python_bin,
-                "config_path": str(source_config),
-                "prepared_config_path": str(prepared_config_path),
-                "worker_root": str(worker_root),
-                "repo_root": str(worker_root),
-                "run_dir": str(run_dir),
-                "run_output_dir": str(run_output_dir),
-                "run_results_dir": str(run_results_dir),
-                "budget_minutes": budget_minutes,
-                "gpu": selected_gpu,
-            }
-            command = render_command(list(target["run"]["command"]), mapping)
-            env["CUDA_VISIBLE_DEVICES"] = selected_gpu
-            env["AR2_RUN_DIR"] = str(run_dir)
-            env["AR2_RUN_OUTPUT_DIR"] = str(run_output_dir)
-            env["AR2_RESULTS_DIR"] = str(run_results_dir)
-            env["AR2_BUDGET_MINUTES"] = str(budget_minutes)
-            cwd = worker_root / str(target["run"].get("cwd") or ".")
-            with (run_dir / "command.json").open("w", encoding="utf-8") as handle:
-                json.dump({"command": command, "cwd": str(cwd)}, handle, ensure_ascii=False, indent=2)
-            try:
-                with (run_dir / "process.log").open("w", encoding="utf-8") as log_handle:
-                    completed = subprocess.run(
-                        command,
-                        cwd=cwd,
-                        env=env,
-                        stdout=log_handle,
-                        stderr=subprocess.STDOUT,
-                        timeout=max(budget_minutes, 1) * 60,
-                        check=False,
-                        text=True,
-                    )
-                process_exit_code = completed.returncode
-            except subprocess.TimeoutExpired:
-                timed_out = True
+            process_exit_code, timed_out = run_process_tree(command, cwd, env, run_dir / "process.log", max(budget_minutes, 1) * 60)
+            if timed_out:
                 completion_reason = "timeout"
-                process_exit_code = None
-            if process_exit_code not in {0, None}:
+                raise AutoresearchV2Error("worker command timed out")
+            if process_exit_code != 0:
                 completion_reason = "process_error"
                 raise AutoresearchV2Error(f"worker command failed with exit code {process_exit_code}")
 
@@ -741,8 +833,13 @@ def run_worker_once(
             time.sleep(simulate_delay_seconds)
 
         try:
-            metric, metric_payload = measure_metric(state, run_dir, run_output_dir, simulate_metric)
+            metric, metric_payload = measure_metric(state, run_dir, simulate_metric)
             metric_extracted = True
+            append_jsonl(events_path(args), {"timestamp": utc_now(), "event": "metric_recorded", "worker": worker, "trial_id": trial_id, "primary_metric": metric})
+            artifact_records = collect_declared_artifacts(worker_root, run_dir, list(target.get("artifacts") or []))
+            for artifact in artifact_records:
+                append_jsonl(events_path(args), {"timestamp": utc_now(), "event": "artifact_recorded", "worker": worker, "trial_id": trial_id, **artifact})
+            write_json(run_dir / "execution.json", {"exit_code": process_exit_code, "timed_out": timed_out, "primary_metric": metric, "metrics": metric_payload.get("metrics", {}), "artifacts": artifact_records})
         except Exception:
             if not timed_out:
                 completion_reason = "metric_error"
@@ -795,7 +892,7 @@ def run_worker_once(
                 timed_out=timed_out,
                 budget_minutes=budget_minutes,
                 run_dir=run_dir,
-                notes=f"gpu={selected_gpu}",
+                notes="resource lease used" if lease is not None else "",
             )
             update_worker_status(
                 latest,
@@ -816,6 +913,7 @@ def run_worker_once(
             )
             record_trial_outcome(args, outcome)
             save_state(args, latest)
+        append_jsonl(events_path(args), {"timestamp": utc_now(), "event": "run_finished", "worker": worker, "trial_id": trial_id, "decision": decision, "completion_reason": completion_reason})
         return {
             "ok": True,
             "worker": worker,
@@ -881,6 +979,7 @@ def run_worker_once(
             )
             record_trial_outcome(args, outcome)
             save_state(args, latest)
+        append_jsonl(events_path(args), {"timestamp": utc_now(), "event": "run_finished", "worker": worker, "trial_id": trial_id, "decision": "crash", "completion_reason": completion_reason, "error_type": type(exc).__name__})
         raise
     finally:
         if lease is not None:
@@ -930,7 +1029,6 @@ def stop(args: argparse.Namespace) -> dict[str, Any]:
                 release_gpu_lease(Path(args.lease_root), gpu)
             stopped.append({"worker": worker, "pid": pid, "killed": killed})
         save_state(args, latest)
-    append_jsonl(events_path(args), {"timestamp": utc_now(), "event": "stop", "workers": stopped})
     return {"ok": True, "command": "stop", "workers": stopped}
 
 
@@ -951,7 +1049,6 @@ def sync_best(args: argparse.Namespace) -> dict[str, Any]:
             update_worker_status(latest, worker, status="idle", last_commit=commit, note="synced to best")
             synced.append({"worker": worker, "status": "synced", "commit": commit})
         save_state(args, latest)
-    append_jsonl(events_path(args), {"timestamp": utc_now(), "event": "sync-best", "workers": synced})
     return {"ok": True, "command": "sync-best", "workers": synced, "best_commit": state.get("best_commit")}
 
 
@@ -966,7 +1063,6 @@ def collect(args: argparse.Namespace) -> dict[str, Any]:
         "leaderboard_path": str(leaderboard_path(args)),
         "state_path": str(state_path(args)),
     }
-    append_jsonl(events_path(args), {"timestamp": utc_now(), "event": "collect"})
     return payload
 
 
@@ -1025,7 +1121,6 @@ def doctor(args: argparse.Namespace) -> dict[str, Any]:
     required_modules = [
         "autoresearch_v2_common.py",
         "autoresearch_v2_gpu_lease.py",
-        "autoresearch_v2_metric_tvilfm.py",
     ]
     missing_modules = [name for name in required_modules if not (module_root / name).is_file()]
     checks.append(
@@ -1039,7 +1134,7 @@ def doctor(args: argparse.Namespace) -> dict[str, Any]:
     target_source = "not provided"
     if args.target:
         target = load_target_spec(Path(args.target))
-        target_repo = Path(target["repo"]["remote_root"])
+        target_repo = Path(target["repo"]["path"])
         target_source = str(Path(args.target))
     elif state_path(args).exists():
         existing_state = read_json(state_path(args), {})

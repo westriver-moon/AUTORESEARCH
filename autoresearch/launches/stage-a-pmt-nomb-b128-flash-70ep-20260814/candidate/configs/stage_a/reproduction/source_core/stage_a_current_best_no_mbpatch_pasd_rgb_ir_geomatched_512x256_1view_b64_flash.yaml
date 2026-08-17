@@ -1,0 +1,27 @@
+extends: vision_text_encoder_stage_a_current_best.yaml
+
+output_root: ${AR2_OUTPUT_DIR}/model_output/
+experiment_name: stageA_current_best_NoMBPatch_PASD-RGB_IR-Geomatched_1view_b64_flash_70ep_seed0
+metric_events_path: ${AR2_OUTPUT_DIR}/events.jsonl
+metric_experiment_id: SALTVI-STAGEA-PMT-NOMB-B128-FLASH-70EP-20260814
+CUDA_VISIBLE_DEVICES: "1"
+gpu_id: "0"
+
+img_h: 512
+img_w: 256
+img_size: [512, 256]
+sysu_source_size: [256, 128]
+batch_size: 64
+num_pos: 4
+total_train_epoch: 70
+pmt_attention_backend: flash
+pmt_gradient_checkpointing: true
+
+sysu_sr_data_root: /home/lab929/datasets/derived/SYSU-MM01-pasd-rgb-ir-geomatched-512x256-1view-v1
+sysu_sr_modalities: [rgb, ir]
+sysu_sr_backend: pasd_multiview
+sysu_sr_view_manifest: /home/lab929/datasets/derived/SYSU-MM01-pasd-rgb-ir-geomatched-512x256-1view-v1/manifest.jsonl
+sysu_sr_views_per_image: 1
+sysu_sr_view_sampling: paired
+sysu_sr_eval_view_index: 0
+sysu_sr_exact_size: true

@@ -1,82 +1,79 @@
 ---
 name: codex-autoresearch-v2
-description: "Invoke the completed remote-first autoresearch v2 runtime with background workers, worker branches, and mechanical keep/discard decisions. Use only for calling the existing interface, preparing run inputs, checking status, collecting results, or launching/resuming/stopping runs; do not modify this skill, packaged plugin, or runtime code unless the user explicitly switches to codex-autoresearch-v2-dev."
+description: "Run remote-first Autoresearch v2 through configured server profiles and schema-v2 targets. Use to diagnose access, bootstrap isolated workers, apply candidates, run or resume experiments, inspect status, and collect metrics or artifacts. Use codex-autoresearch-v2-dev for implementation or packaging changes."
 ---
 
-# codex-autoresearch-v2
+# Codex autoresearch v2
 
-Use this skill in invocation mode. Treat the skill, runtime, guard, and packaged
-plugin as sealed implementation code.
+Use this skill in invocation mode.
+Call the generic runtime; keep project semantics in the program and target.
 
-## Core Contract
+## Start
 
-- Human launch is explicit.
-- After launch, the runtime may continue without mid-run confirmation.
-- Remote SSH is allowed only to the approved research host from local config.
-- Remote edits must stay inside the target's declared mutable paths.
-- Keep/discard is mechanical and metric-driven.
-- Worker branches are disposable; the best branch is the retained truth.
-- Do not edit sealed autoresearch implementation paths in invocation mode.
-
-## Mode Boundary
-
-Invocation mode may edit run inputs and target overlays, then call the runtime.
-It must not modify:
-
-- `.agents/skills/codex-autoresearch-v2/**`
-- `scripts/remote/guard-autoresearch-mode.ps1`
-- `scripts/remote/autoresearch-v2.ps1`
-- `scripts/remote/smoke-autoresearch-v2.ps1`
-- `scripts/remote/lib/common.ps1`
-- `scripts/remote/lib/ssh.ps1`
-- `scripts/remote/lib/result.ps1`
-- `scripts/remote/lib/paths.ps1`
-- `scripts/remote/lib/autoresearch_v2.ps1`
-- `scripts/remote/remote-bin/autoresearch_v2_*.py`
-- `scripts/remote/remote-bin/run_autoresearch_v2_bridge.sh`
-- `plugins/codex-autoresearch-v2/**`
-
-Use `$codex-autoresearch-v2-dev` only when the user asks to develop, repair, or
-package the skill/runtime itself. Check the boundary with:
+Before any SSH action, resolve a configured Profile from the active workspace
+root. In non-interactive execution, never open the console picker. If the user
+named a configured Profile, validate and select it explicitly:
 
 ```powershell
-scripts/remote/guard-autoresearch-mode.ps1 -Mode invoke -FromGit -Json
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\remote\select-profile.ps1 -RemoteProfile <profile> -NonInteractive
 ```
 
-## Inputs
+Otherwise resolve the configured `ActiveRemoteProfile` deterministically:
 
-- `autoresearch/program.md`
-- `autoresearch/targets/*.yaml`
-- `config/autoresearch-v2.local.psd1` or `config/autoresearch-v2.example.psd1`
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\remote\select-profile.ps1 -NonInteractive
+```
 
-## Main Runtime
-
-Use the unified PowerShell entrypoint:
+Omit `-NonInteractive` only when a human explicitly asks to use the interactive
+picker. Use the selector's JSON `remote_profile` for every controller call;
+this selection overrides any earlier host or Profile. Then call:
 
 ```text
 scripts/remote/autoresearch-v2.ps1
 ```
 
-The runtime supports:
+Commands: `access-doctor`, `access-ensure`, `deploy`, `doctor`, `bootstrap`,
+`inspect`, `apply`, `baseline`, `run`, `resume`, `status`, `collect`, `stop`,
+and `sync-best`.
 
-- deploy
-- doctor
-- bootstrap
-- inspect
-- apply
-- baseline
-- run
-- resume
-- status
-- collect
-- stop
-- sync-best
+## Workflow
 
-## References
+1. Validate the program and explicit schema v2 target.
+2. Run `access-doctor` when access needs verification, then `doctor`.
+3. Bootstrap isolated worker branches/worktrees.
+4. Establish one baseline.
+5. Apply candidate changes only inside declared mutable paths.
+6. Run or resume workers.
+7. Inspect status and collect state, provenance, metrics, and artifacts.
 
-- `references/mode-contract.md`
-- `references/program-contract.md`
-- `references/target-contract.md`
-- `references/keep-discard-contract.md`
-- `references/recovery-contract.md`
-- `references/parallel-workers-contract.md`
+## Hard rules
+
+- Require explicit human launch.
+- Restrict SSH to the configured research host.
+- Require integer `schema_version: 2`; reject others with `unsupported-schema`.
+- Execute `run.argv` unchanged; do not rewrite project configuration.
+- Read metrics only from the result file, never stdout.
+- For SYSU-MM01, distinguish run or split IDs from gallery trials; default to
+  the 10-trial protocol and record only its aggregate metrics.
+- For RegDB, state whether each result is from one numbered trial or a
+  multi-trial mean.
+- Do not write defensive code, stack patches, or add unnecessary safety gates.
+- Do not use SHA-256 unless the user explicitly requests cautious deletion.
+- Treat hard links, export copies, and alternate paths to one checkpoint as the
+  same experiment; avoid hard links unless necessary.
+- Do not edit sealed implementation paths in invocation mode.
+
+Use `$codex-autoresearch-v2-dev` only when the user asks to develop, repair,
+validate, or package the implementation. Check the boundary with:
+
+```powershell
+scripts/remote/guard-autoresearch-mode.ps1 -Mode invoke -FromGit -Json
+```
+
+## Load only when needed
+
+- Program or target authoring: `references/input-contract.md`.
+- Access, Profiles, SSH, tunnels, or proxies:
+  `references/remote-access-contract.md`.
+- Retention, recovery, or parallel workers: `references/runtime-contract.md`.
+- Metrics, artifacts, or hashes: `references/result-provenance-contract.md`.

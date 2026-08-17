@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import argparse
 import json
+import math
 from pathlib import Path
+from pathlib import PurePosixPath
 from typing import Any
 
 import yaml
@@ -52,6 +55,31 @@ def ensure_list_of_strings(value: Any, label: str) -> list[str]:
     return normalized
 
 
+def ensure_optional_list_of_strings(value: Any, label: str) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise ContractError(f"{label} must be a list.")
+    return [ensure_string(item, label) for item in value]
+
+
+def ensure_relative_path(value: Any, label: str) -> str:
+    text = ensure_string(value, label).replace("\\", "/")
+    path = PurePosixPath(text)
+    if path.is_absolute() or ".." in path.parts:
+        raise ContractError(f"{label} must be a contained relative path.")
+    return text
+
+
+def ensure_finite_number(value: Any, label: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ContractError(f"{label} must be a JSON number.")
+    result = float(value)
+    if not math.isfinite(result):
+        raise ContractError(f"{label} must be finite.")
+    return result
+
+
 def validate_program_dict(data: dict[str, Any]) -> dict[str, Any]:
     goal = ensure_string(data.get("goal"), "goal")
     metric = ensure_string(data.get("metric"), "metric")
@@ -80,45 +108,67 @@ def validate_program_dict(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def validate_target_dict(data: dict[str, Any]) -> dict[str, Any]:
+    if data.get("schema_version") != 2:
+        raise ContractError("unsupported-schema: target schema_version must be integer 2.")
     name = ensure_string(data.get("name"), "name")
     repo = ensure_mapping(data.get("repo"), "repo")
     run = ensure_mapping(data.get("run"), "run")
-    metric = ensure_mapping(run.get("metric"), "run.metric")
-    repo_remote_root = ensure_string(repo.get("remote_root"), "repo.remote_root")
-    repo_base_ref = ensure_string(repo.get("base_ref"), "repo.base_ref")
+    metric = ensure_mapping(data.get("metric"), "metric")
+    gpu = ensure_mapping(data.get("gpu") or {"mode": "none"}, "gpu")
+    provenance = ensure_mapping(data.get("provenance") or {}, "provenance")
+    repo_path = ensure_string(repo.get("path"), "repo.path")
+    repo_base_ref = ensure_string(repo.get("base_ref") or "HEAD", "repo.base_ref")
     mutable_paths = ensure_list_of_strings(repo.get("mutable_paths"), "repo.mutable_paths")
-    command = run.get("command")
-    if not isinstance(command, list) or not command:
-        raise ContractError("run.command must be a non-empty list.")
-    command = [ensure_string(item, "run.command") for item in command]
-    parser_name = ensure_string(metric.get("parser"), "run.metric.parser")
-    direction = ensure_string(metric.get("direction"), "run.metric.direction")
+    argv = ensure_list_of_strings(run.get("argv"), "run.argv")
+    environment = ensure_mapping(run.get("env") or {}, "run.env")
+    budget_minutes = run.get("budget_minutes", 30)
+    if isinstance(budget_minutes, bool) or not isinstance(budget_minutes, int) or budget_minutes < 1:
+        raise ContractError("run.budget_minutes must be a positive integer.")
+    direction = ensure_string(metric.get("direction"), "metric.direction")
     if direction not in {"higher", "lower"}:
-        raise ContractError("run.metric.direction must be 'higher' or 'lower'.")
+        raise ContractError("metric.direction must be 'higher' or 'lower'.")
+    metric_path = ensure_relative_path(metric.get("path") or "metrics.json", "metric.path")
+    primary_key = ensure_string(metric.get("primary_key") or "primary_metric", "metric.primary_key")
+    if primary_key != "primary_metric":
+        raise ContractError("metric.primary_key must be 'primary_metric' in schema_version 2.")
+    gpu_mode = ensure_string(gpu.get("mode") or "none", "gpu.mode")
+    if gpu_mode not in {"none", "lease"}:
+        raise ContractError("gpu.mode must be 'none' or 'lease'.")
     return {
+        "schema_version": 2,
         "name": name,
         "repo": {
-            "remote_root": repo_remote_root,
+            "path": repo_path,
             "base_ref": repo_base_ref,
             "mutable_paths": mutable_paths,
-            "readonly_paths": [str(item) for item in repo.get("readonly_paths") or []],
+            "readonly_paths": ensure_optional_list_of_strings(repo.get("readonly_paths"), "repo.readonly_paths"),
         },
         "run": {
-            "cwd": str(run.get("cwd") or "."),
-            "command": command,
-            "budget_minutes": dict(run.get("budget_minutes") or {}),
-            "metric": {
-                "parser": parser_name,
-                "direction": direction,
-                "path": str(metric.get("path") or "metrics.json"),
-                "primary_key": str(metric.get("primary_key") or "primary_metric"),
-            },
+            "cwd": ensure_relative_path(run.get("cwd") or ".", "run.cwd"),
+            "argv": argv,
+            "env": {ensure_string(key, "run.env key"): ensure_string(value, f"run.env.{key}") for key, value in environment.items()},
+            "budget_minutes": budget_minutes,
         },
-        "artifacts": {
-            "collect": [str(item) for item in (data.get("artifacts") or {}).get("collect", [])],
+        "metric": {
+            "path": metric_path,
+            "primary_key": primary_key,
+            "direction": direction,
         },
-        "training": dict(data.get("training") or {}),
-        "gpu": dict(data.get("gpu") or {}),
+        "artifacts": [
+            ensure_relative_path(item, "artifacts")
+            for item in ensure_optional_list_of_strings(data.get("artifacts"), "artifacts")
+        ],
+        "provenance": {
+            "inputs": [
+                ensure_relative_path(item, "provenance.inputs")
+                for item in ensure_optional_list_of_strings(provenance.get("inputs"), "provenance.inputs")
+            ],
+        },
+        "gpu": {
+            "mode": gpu_mode,
+            "selector": str(gpu.get("selector") or "0"),
+            "max_wait_seconds": int(gpu.get("max_wait_seconds") or 0),
+        },
     }
 
 
@@ -129,3 +179,25 @@ def as_json_summary(program: dict[str, Any] | None = None, target: dict[str, Any
     if target is not None:
         payload["target"] = target
     return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Validate autoresearch v2 contracts")
+    commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("validate-program").add_argument("--path", required=True)
+    commands.add_parser("validate-target").add_argument("--path", required=True)
+    args = parser.parse_args()
+
+    if args.command == "validate-program":
+        print(as_json_summary(program=validate_program_dict(load_program_front_matter(args.path))))
+    else:
+        print(as_json_summary(target=validate_target_dict(load_target_config(args.path))))
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except ContractError as exc:
+        print(json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False, indent=2))
+        raise SystemExit(1) from exc

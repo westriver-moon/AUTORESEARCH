@@ -10,6 +10,7 @@ id_ed25519*
 config/*.local.psd1
 autoresearch-results/
 autoresearch-runs/
+tmp_events/
 experiments/*/remote/*.json
 .agents/vendor/
 research-ops/tmp/
@@ -38,3 +39,31 @@ research-ops/library/logs/**
 # Python generated files
 __pycache__/
 *.py[cod]
+.pytest_cache/
+
+# Local Codex/autoresearch scratch and transfer directories
+.codex_tmp/
+.codex-tmp/
+.codex-transfer/
+.codex-staging/
+.codex-staging-feature-analysis/
+.codex-remote-edit/
+.codex_artifacts/
+tmp/
+tmp_semantic_probability_review/
+tmp_sysu_full_eval/
+
+# Local experiment candidates, patches, previews, and archives
+autoresearch-candidates/
+aaai27_preview_20260731/
+qwen36_int4_remote_patch/
+saltvi_remote_edit/
+paper.pdf
+pasd_swinir_comparison_cam5_0162_0020.png
+salt-vi-src.tar.gz
+CHECKPOINT_INVENTORY_20260803.md
+reports/server-ybj-cleanup-manifest-*.tsv
+reports/server-ybj-final-delete-list-*.txt
+
+# Local Codex desktop sandbox settings
+.codex/config.toml

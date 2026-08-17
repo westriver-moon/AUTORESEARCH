@@ -1,6 +1,0 @@
-interface:
-  display_name: "Paper Digest"
-  short_description: "Parse Zotero PDFs into reading notes and graphs."
-  default_prompt: "Use $paper-digest to parse recent Zotero candidate papers into structured reading cards."
-policy:
-  allow_implicit_invocation: false

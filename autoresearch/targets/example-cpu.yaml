@@ -1,0 +1,31 @@
+schema_version: 2
+name: example-cpu-target
+
+repo:
+  path: /path/to/repository
+  base_ref: HEAD
+  mutable_paths:
+    - src/**
+
+run:
+  cwd: .
+  argv:
+    - python
+    - -c
+    - "import json, os, pathlib; p=pathlib.Path(os.environ['AR2_RESULTS_DIR'])/'metrics.json'; p.parent.mkdir(parents=True, exist_ok=True); p.write_text(json.dumps({'primary_metric': 1.0}), encoding='utf-8')"
+  env:
+    EXAMPLE_MODE: baseline
+  budget_minutes: 5
+
+metric:
+  path: metrics.json
+  primary_key: primary_metric
+  direction: higher
+
+artifacts: []
+
+provenance:
+  inputs: []
+
+gpu:
+  mode: none

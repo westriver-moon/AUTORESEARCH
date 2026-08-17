@@ -1,0 +1,38 @@
+schema_version: 2
+name: stage-b-best-text-to-original-rgb-image-test
+repo:
+  path: /home/lab929/ybj/SALT-VI
+  base_ref: 7e9639f654ed94f455856323e76c96d7080eb86e
+  mutable_paths:
+    - scripts/evaluation/run_stage_b_best_text_to_image.py
+  readonly_paths:
+    - checkpoints/**
+    - experiments/**
+    - reports/**
+    - runtime/**
+run:
+  cwd: .
+  argv:
+    - /home/lab929/ybj/.conda-envs/salt-vi-flash/bin/python3.9
+    - scripts/evaluation/run_stage_b_best_text_to_image.py
+  env:
+    PYTHONDONTWRITEBYTECODE: "1"
+    TOKENIZERS_PARALLELISM: "false"
+  budget_minutes: 120
+metric:
+  direction: higher
+  path: metrics.json
+  primary_key: primary_metric
+artifacts:
+  - scripts/evaluation/run_stage_b_best_text_to_image.py
+provenance:
+  inputs:
+    - configs/stage_b/r_text_visual_20260729.yaml
+    - src/salt_vi/data/dataset.py
+    - src/salt_vi/data/loader.py
+    - src/salt_vi/engine/test.py
+    - src/salt_vi/entrypoints/train.py
+gpu:
+  mode: lease
+  selector: "1,3"
+  max_wait_seconds: 900

@@ -1,22 +1,27 @@
 {
-  "name": "codex-autoresearch-v2",
-  "version": "0.1.1",
-  "description": "Versioned invocation-only package for the remote-first autoresearch v2 runtime.",
-  "author": {
-    "name": "Local Research Workspace"
-  },
-  "skills": "./skills/",
-  "interface": {
-    "displayName": "Codex Autoresearch v2",
-    "shortDescription": "Invoke sealed remote-first autoresearch runs.",
-    "longDescription": "Provides the invocation-only codex-autoresearch-v2 skill and bundled remote-first runtime scripts. Development and packaging changes belong in the separate codex-autoresearch-v2-dev skill.",
-    "developerName": "Local Research Workspace",
-    "category": "Productivity",
-    "capabilities": ["Remote orchestration", "Background workers", "Metric retention"],
-    "defaultPrompt": [
-      "Use $codex-autoresearch-v2 to inspect or resume an autoresearch run.",
-      "Use $codex-autoresearch-v2 to collect the latest autoresearch results."
-    ],
-    "brandColor": "#0F766E"
-  }
+    "name":  "codex-autoresearch-v2",
+    "version":  "0.5.2",
+    "description":  "Invocation-only package for remote-first Autoresearch v2.",
+    "author":  {
+                   "name":  "Local Research Workspace"
+               },
+    "skills":  "./skills/",
+    "interface":  {
+                      "displayName":  "Codex Autoresearch v2",
+                      "shortDescription":  "Invoke generic schema v2 autoresearch runs.",
+                      "longDescription":  "Runs schema-v2 targets through configured remote Profiles with isolated workers, metric retention, collection, and optional resource leases. Implementation changes use the separate development skill.",
+                      "developerName":  "Local Research Workspace",
+                      "category":  "Productivity",
+                      "capabilities":  [
+                                           "Remote profile access",
+                                           "Remote orchestration",
+                                           "Background workers",
+                                           "Generic metric retention"
+                                       ],
+                      "defaultPrompt":  [
+                                            "Use $codex-autoresearch-v2 to inspect or resume an autoresearch run.",
+                                            "Use $codex-autoresearch-v2 to collect the latest autoresearch results."
+                                        ],
+                      "brandColor":  "#0F766E"
+                  }
 }

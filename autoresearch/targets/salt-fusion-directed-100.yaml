@@ -1,0 +1,48 @@
+schema_version: 2
+name: salt-fusion-directed-100-sysu
+
+repo:
+  path: /home/lab929/ybj/SALT-VI
+  base_ref: a5a760f993448c5de89954d06d22bc186db619d4
+  mutable_paths:
+    - configs/experiments/fusion_directed_100/phase_a.yaml
+    - configs/experiments/fusion_directed_100/phase_b.yaml
+    - scripts/training/run_fusion_directed_100.py
+  readonly_paths:
+    - src/**
+    - configs/stage_a/**
+    - configs/stage_b/**
+    - checkpoints/**
+    - logs/**
+
+run:
+  cwd: .
+  argv:
+    - /home/cgv841/anaconda3/envs/clipreid/bin/python
+    - scripts/training/run_fusion_directed_100.py
+  env:
+    PYTHONDONTWRITEBYTECODE: "1"
+    TOKENIZERS_PARALLELISM: "false"
+  budget_minutes: 1800
+
+metric:
+  path: metrics.json
+  primary_key: primary_metric
+  direction: higher
+
+artifacts:
+  - configs/experiments/fusion_directed_100/phase_a.yaml
+  - configs/experiments/fusion_directed_100/phase_b.yaml
+  - scripts/training/run_fusion_directed_100.py
+
+provenance:
+  inputs:
+    - configs/experiments/fusion_directed_100/phase_a.yaml
+    - configs/experiments/fusion_directed_100/phase_b.yaml
+    - scripts/training/run_fusion_directed_100.py
+
+gpu:
+  mode: lease
+  selector: "0,2,3"
+  max_wait_seconds: 900
+

@@ -3,8 +3,8 @@ $ErrorActionPreference = "Stop"
 
 function Get-DefaultAutoresearchV2Config {
     return @{
-        ProgramPath = "autoresearch/program.md"
-        TargetPath = "autoresearch/targets/tvilfm-stage-a.yaml"
+        ProgramPath = "autoresearch/program-example.md"
+        TargetPath = "autoresearch/targets/example-cpu.yaml"
         LocalRunRoot = "autoresearch-runs"
         BranchPrefix = "autoresearch/"
         DefaultWorkerCount = 1
@@ -22,17 +22,32 @@ function Get-DefaultAutoresearchV2Config {
 function Get-AutoresearchV2Config {
     param(
         [Parameter(Mandatory = $true)]
-        [string] $ProjectRoot
+        [string] $ProjectRoot,
+        [string] $RemoteProfile = ""
     )
 
     $config = Get-DefaultAutoresearchV2Config
-    $examplePath = Join-Path $ProjectRoot "config\autoresearch-v2.example.psd1"
-    $localPath = Join-Path $ProjectRoot "config\autoresearch-v2.local.psd1"
-    foreach ($candidate in @($examplePath, $localPath)) {
-        if (Test-Path -LiteralPath $candidate) {
-            $loaded = Import-PowerShellDataFile -LiteralPath $candidate
-            foreach ($key in $loaded.Keys) {
-                $config[$key] = $loaded[$key]
+    $configuration = Get-AutoresearchConfiguration -ProjectRoot $ProjectRoot
+    foreach ($key in @($config.Keys)) {
+        if ($configuration.ContainsKey($key)) {
+            $config[$key] = $configuration[$key]
+        }
+    }
+    if (-not [string]::IsNullOrWhiteSpace($RemoteProfile)) {
+        if (-not $configuration.ContainsKey("RemoteProfiles")) {
+            throw "Remote profile '$RemoteProfile' cannot supply runtime settings because RemoteProfiles is not configured."
+        }
+        $profiles = $configuration.RemoteProfiles
+        if (-not ($profiles -is [hashtable]) -or (-not $profiles.ContainsKey($RemoteProfile))) {
+            throw "Remote profile '$RemoteProfile' was not found in RemoteProfiles."
+        }
+        $profile = $profiles[$RemoteProfile]
+        if (-not ($profile -is [hashtable])) {
+            throw "RemoteProfiles['$RemoteProfile'] must be a hashtable."
+        }
+        foreach ($key in @($config.Keys)) {
+            if ($profile.ContainsKey($key)) {
+                $config[$key] = $profile[$key]
             }
         }
     }
@@ -111,18 +126,14 @@ function Ensure-AutoresearchV2LocalRunDir {
 function Ensure-RemoteDirectory {
     param(
         [Parameter(Mandatory = $true)]
-        [hashtable] $RemoteConfig,
+        [hashtable] $RemoteAccess,
         [Parameter(Mandatory = $true)]
         [string] $RemotePath
     )
 
     Assert-RemotePath -Path $RemotePath -Name "RemotePath"
     $command = "bash -lc " + (Quote-PosixSingle ("mkdir -p " + (Quote-PosixSingle $RemotePath)))
-    Invoke-RemoteSsh `
-        -RemoteHost ([string] $RemoteConfig.RemoteHost) `
-        -SshConfigPath ([string] $RemoteConfig.SshConfigPath) `
-        -ConnectTimeoutSec ([int] $RemoteConfig.ConnectTimeoutSec) `
-        -RemoteCommand $command | Out-Null
+    Invoke-AutoresearchRemoteCommand -Access $RemoteAccess -RemoteCommand $command | Out-Null
 }
 
 function Convert-BridgeOutput {
@@ -140,7 +151,7 @@ function Convert-BridgeOutput {
 function Invoke-AutoresearchV2Bridge {
     param(
         [Parameter(Mandatory = $true)]
-        [hashtable] $RemoteConfig,
+        [hashtable] $RemoteAccess,
         [Parameter(Mandatory = $true)]
         [hashtable] $V2Config,
         [Parameter(Mandatory = $true)]
@@ -155,23 +166,24 @@ function Invoke-AutoresearchV2Bridge {
         $cmdText += " " + (Quote-PosixSingle $argument)
     }
     $remoteCommand = "bash -lc " + (Quote-PosixSingle $cmdText)
-    return Invoke-RemoteSsh `
-        -RemoteHost ([string] $RemoteConfig.RemoteHost) `
-        -SshConfigPath ([string] $RemoteConfig.SshConfigPath) `
-        -ConnectTimeoutSec ([int] $RemoteConfig.ConnectTimeoutSec) `
+    return Invoke-AutoresearchRemoteCommand `
+        -Access $RemoteAccess `
         -RemoteCommand $remoteCommand `
         -AllowFailure:$AllowFailure
 }
 
-function Invoke-LocalValidator {
+function Invoke-AutoresearchContractValidation {
     param(
         [Parameter(Mandatory = $true)]
         [string] $ScriptPath,
         [Parameter(Mandatory = $true)]
+        [ValidateSet("validate-program", "validate-target")]
+        [string] $Command,
+        [Parameter(Mandatory = $true)]
         [string] $InputPath
     )
 
-    $output = & python $ScriptPath --path $InputPath 2>&1
+    $output = & python $ScriptPath $Command --path $InputPath 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw ($output | Out-String)
     }
