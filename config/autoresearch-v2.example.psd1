@@ -1,6 +1,8 @@
 @{
     # Remote access layer. Keep credentials and concrete hosts in the ignored
     # autoresearch-v2.local.psd1 file or in the user's OpenSSH configuration.
+    # ActiveRemoteProfile is only the first-selection default for a new Codex
+    # session; after selection the session lock wins until an explicit switch.
     ActiveRemoteProfile = ''
     RemoteHost = ''
     TunnelAlias = ''
@@ -14,6 +16,9 @@
     ProxyProbeUrl = 'https://github.com'
     # Profiles may override both access settings and the Remote* runtime roots
     # below when accounts or servers use different home directories.
+    # Use machine-scoped keys such as 'account-machine' rather than account
+    # names. Optional ExpectedHostname/ExpectedUser fields let access-doctor
+    # verify the connected host.
     RemoteProfiles = @{
         # 'example-profile' = @{
         #     DisplayName = 'Example server'
@@ -34,6 +39,14 @@
     ProgramPath = 'autoresearch/program-example.md'
     TargetPath = 'autoresearch/targets/example-cpu.yaml'
     LocalRunRoot = 'autoresearch-runs'
+    # Optional direct server git remote. When LocalRepositoryPath is set, the
+    # controller uses the selected server repository as a git remote and
+    # fetches run branches after remote mutations. LocalGitRemoteUrl may be set
+    # at the Profile level to pin the exact repository URL; otherwise it is
+    # derived from RemoteHost plus the target repo.path.
+    LocalRepositoryPath = ''
+    LocalGitRemoteName = ''
+    LocalGitRemoteUrl = ''
     BranchPrefix = 'autoresearch/'
     DefaultWorkerCount = 1
     DefaultBudgetMinutes = 30

@@ -2,13 +2,17 @@
 
 `autoresearch-v2.ps1` is the single controller for `access-doctor`,
 `access-ensure`, `deploy`, `doctor`, `bootstrap`, `inspect`, `apply`,
-`baseline`, `run`, `resume`, `status`, `collect`, `stop`, and `sync-best`.
+`baseline`, `run`, `resume`, `status`, `collect`, `stop`, `sync-best`, and
+`sync`.
+`sync` fetches run branches directly from the selected server repository's git
+remote; `-Checkout -CheckoutBranch <branch>` also fetches that exact branch and
+updates the local worktree.
 
 Supporting entrypoints:
 
-- `select-profile.ps1` selects a configured Profile locally. Pass
-  `-NonInteractive` to resolve `ActiveRemoteProfile` without opening the picker,
-  or combine it with `-RemoteProfile <name>` for an explicit validated choice.
+- `select-profile.ps1` resolves the session Profile. The first call per Codex
+  session locks `ActiveRemoteProfile` (or the passed `-RemoteProfile`); later
+  calls return the lock. `-Force` overwrites the lock for an explicit switch.
 - `smoke-autoresearch-v2.ps1` runs the explicit program/target CPU smoke flow.
 - `guard-autoresearch-mode.ps1` enforces the policy in
   `.codex/research-policy.json`.
@@ -16,12 +20,16 @@ Supporting entrypoints:
 ## Boundaries
 
 - `lib/config.ps1` loads the public and ignored local configuration.
+- `lib/profile_session_state.ps1` owns the per-thread Profile lock.
 - `lib/remote_access.ps1` owns Profile resolution, SSH/SCP, tunnels, and proxy
-  checks. `access-doctor` verifies SSH and, when required, the HTTP proxy;
-  `access-ensure` may start only the configured tunnel helper.
+  checks. `access-doctor` verifies SSH, expected host/user identity, and, when
+  required, the HTTP proxy; `access-ensure` may start only the configured
+  tunnel helper.
 - `lib/autoresearch_v2.ps1` resolves runtime roots from the selected Profile,
   allowing different accounts or servers to use different home directories.
 - `lib/autoresearch_v2.ps1` maps controller operations to the remote bridge.
+- `lib/autoresearch_v2.ps1` owns direct server git remote synchronization when
+  `LocalRepositoryPath` and `LocalGitRemoteName` are configured.
 - `remote-bin/` owns remote worker state, worktrees, leases, retention, and
   collection.
 

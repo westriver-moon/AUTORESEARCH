@@ -24,3 +24,14 @@
 - Update the best branch only after a retained improvement.
 - Let workers sync to the retained best commit.
 - Share one ledger and leaderboard.
+
+## Direct server repository remote
+
+- When `LocalRepositoryPath` is configured, the controller uses the selected
+  server repository as a direct git remote (`LocalGitRemoteName`, URL from
+  `LocalGitRemoteUrl` or `<RemoteHost>:<target repo.path>`) and fetches
+  `refs/heads/<branch_prefix><run>-*` after bootstrap, apply, baseline, run,
+  resume, sync-best, and collect.
+- `sync` performs the same fetch explicitly; fetching is automatic, while
+  `-Checkout -CheckoutBranch <branch>` also fetches that exact branch from the
+  server remote before updating the local worktree.

@@ -7,6 +7,7 @@ from support import PROJECT_ROOT
 CONFIG = PROJECT_ROOT / "config" / "autoresearch-v2.example.psd1"
 ENTRY = PROJECT_ROOT / "scripts" / "remote" / "autoresearch-v2.ps1"
 ACCESS = PROJECT_ROOT / "scripts" / "remote" / "lib" / "remote_access.ps1"
+SESSION = PROJECT_ROOT / "scripts" / "remote" / "lib" / "profile_session_state.ps1"
 
 
 class RemoteAccessContractTest(unittest.TestCase):
@@ -40,6 +41,20 @@ class RemoteAccessContractTest(unittest.TestCase):
             self.assertIn(f"function {function}", text)
         self.assertIn('"--proxy"', text)
         self.assertIn('"--head"', text)
+        self.assertIn('"hostname; whoami"', text)
+        self.assertIn('"ExpectedHostname"', text)
+        self.assertIn('"ExpectedUser"', text)
+
+    def test_profile_selection_is_locked_per_session(self) -> None:
+        text = SESSION.read_text(encoding="utf-8")
+        for function in (
+            "Get-AutoresearchSessionId",
+            "Resolve-AutoresearchSessionProfile",
+            "Save-AutoresearchSessionProfile",
+        ):
+            self.assertIn(f"function {function}", text)
+        self.assertIn("CODEX_THREAD_ID", text)
+        self.assertIn("CODEX_AUTORESEARCH_STATE_ROOT", text)
 
     def test_controller_consumes_access_context_only(self) -> None:
         text = ENTRY.read_text(encoding="utf-8")
@@ -55,6 +70,7 @@ class RemoteAccessContractTest(unittest.TestCase):
         text = ENTRY.read_text(encoding="utf-8")
         self.assertIn("$remoteAccess.SelectedRemoteProfile", text)
         self.assertIn("-RemoteProfile $selectedRemoteProfile", text)
+        self.assertIn("Resolve-AutoresearchSessionProfile", text)
 
 if __name__ == "__main__":
     unittest.main()

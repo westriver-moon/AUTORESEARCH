@@ -10,31 +10,33 @@ Call the generic runtime; keep project semantics in the program and target.
 
 ## Start
 
-Before any SSH action, resolve a configured Profile from the active workspace
-root. In non-interactive execution, never open the console picker. If the user
-named a configured Profile, validate and select it explicitly:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\remote\select-profile.ps1 -RemoteProfile <profile> -NonInteractive
-```
-
-Otherwise resolve the configured `ActiveRemoteProfile` deterministically:
+Before any SSH action, resolve the session Profile once. A Codex session locks
+its Profile at first enable; reuse that lock for every controller call. Do not
+re-run the selector or re-ask the user later in the same session.
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\remote\select-profile.ps1 -NonInteractive
 ```
 
-Omit `-NonInteractive` only when a human explicitly asks to use the interactive
-picker. Use the selector's JSON `remote_profile` for every controller call;
-this selection overrides any earlier host or Profile. Then call:
+The first call writes the session lock; later calls return the locked Profile.
+`ActiveRemoteProfile` is only the default for that first resolution. Use the
+selector's JSON `remote_profile` for controller calls. Then call:
 
 ```text
 scripts/remote/autoresearch-v2.ps1
 ```
 
+Switch only when the user explicitly asks to change servers. This overwrites
+the session lock and takes effect for the rest of the session:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\remote\select-profile.ps1 -RemoteProfile <profile> -Force -NonInteractive
+```
+
 Commands: `access-doctor`, `access-ensure`, `deploy`, `doctor`, `bootstrap`,
 `inspect`, `apply`, `baseline`, `run`, `resume`, `status`, `collect`, `stop`,
-and `sync-best`.
+`sync-best`, and `sync`. Session switching uses the `select-profile.ps1 -Force`
+command; it is not a controller mode.
 
 ## Workflow
 
@@ -45,11 +47,15 @@ and `sync-best`.
 5. Apply candidate changes only inside declared mutable paths.
 6. Run or resume workers.
 7. Inspect status and collect state, provenance, metrics, and artifacts.
+8. `sync` fetches run branches directly from the selected server repository's
+   git remote into the local repository. `-Checkout -CheckoutBranch <branch>`
+   also fetches that exact branch and updates the local worktree.
 
 ## Hard rules
 
 - Require explicit human launch.
 - Restrict SSH to the configured research host.
+- Keep the session Profile locked; switch only on explicit user request.
 - Require integer `schema_version: 2`; reject others with `unsupported-schema`.
 - Execute `run.argv` unchanged; do not rewrite project configuration.
 - Read metrics only from the result file, never stdout.
@@ -62,6 +68,16 @@ and `sync-best`.
 - Treat hard links, export copies, and alternate paths to one checkpoint as the
   same experiment; avoid hard links unless necessary.
 - Do not edit sealed implementation paths in invocation mode.
+
+## Restricted actions
+
+Do not perform the following actions on your own initiative. Each requires an
+explicit user request first:
+
+- Create a Git branch or worktree.
+- Commit to or push to a remote branch other than the default branch (`main`
+  by default).
+- Verify or require a SHA-256 checksum.
 
 Use `$codex-autoresearch-v2-dev` only when the user asks to develop, repair,
 validate, or package the implementation. Check the boundary with:

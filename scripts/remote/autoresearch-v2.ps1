@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("access-doctor", "access-ensure", "deploy", "doctor", "bootstrap", "inspect", "apply", "baseline", "run", "resume", "status", "collect", "stop", "sync-best")]
+    [ValidateSet("access-doctor", "access-ensure", "deploy", "doctor", "bootstrap", "inspect", "apply", "baseline", "run", "resume", "status", "collect", "stop", "sync-best", "sync")]
     [string] $Mode,
     [string] $RunTag = "",
     [string] $ProgramPath = "",
@@ -9,6 +9,8 @@ param(
     [switch] $AllWorkers,
     [string] $SourcePath = "",
     [string] $Note = "",
+    [string] $CheckoutBranch = "",
+    [switch] $Checkout,
     [int] $WorkerCount = 0,
     [int] $BudgetMinutes = 0,
     [string] $KeepThreshold = "",
@@ -26,17 +28,19 @@ $ErrorActionPreference = "Stop"
 $remoteScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $remoteScriptRoot "lib\common.ps1")
 . (Join-Path $remoteScriptRoot "lib\config.ps1")
+. (Join-Path $remoteScriptRoot "lib\profile_session_state.ps1")
 . (Join-Path $remoteScriptRoot "lib\remote_access.ps1")
 . (Join-Path $remoteScriptRoot "lib\autoresearch_v2.ps1")
 
 $projectRoot = Get-ProjectRoot -RemoteScriptRoot $remoteScriptRoot
-$enableProfileSelection = [string]::IsNullOrWhiteSpace($RemoteHost)
+if ([string]::IsNullOrWhiteSpace($RemoteProfile)) {
+    $RemoteProfile = (Resolve-AutoresearchSessionProfile -ProjectRoot $projectRoot).profile
+}
 $remoteAccess = Get-AutoresearchRemoteAccess `
     -ProjectRoot $projectRoot `
     -RemoteProfile $RemoteProfile `
     -RemoteHost $RemoteHost `
-    -SshConfigPath $SshConfigPath `
-    -AllowInteractiveProfileSelection:$enableProfileSelection
+    -SshConfigPath $SshConfigPath
 $selectedRemoteProfile = if ($remoteAccess.ContainsKey("SelectedRemoteProfile")) {
     [string] $remoteAccess.SelectedRemoteProfile
 } else {
@@ -109,6 +113,21 @@ function Complete-V2BridgeResult {
     if (-not $ok) {
         exit 1
     }
+}
+
+function Sync-AutoresearchV2LocalAfterBridge {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $RunTag
+    )
+
+    $null = Sync-AutoresearchV2LocalRepository `
+        -Access $remoteAccess `
+        -Config $v2Config `
+        -ProjectRoot $projectRoot `
+        -RunTag $RunTag `
+        -TargetPath ([string] $v2Config.TargetPath) `
+        -ContractValidator $contractValidator
 }
 
 try {
@@ -188,6 +207,22 @@ try {
             }
             break
         }
+        "sync" {
+            $result = Sync-AutoresearchV2LocalRepository `
+                -Access $remoteAccess `
+                -Config $v2Config `
+                -ProjectRoot $projectRoot `
+                -RunTag $RunTag `
+                -TargetPath $TargetPath `
+                -ContractValidator $contractValidator `
+                -FetchBranch $CheckoutBranch `
+                -CheckoutBranch $CheckoutBranch `
+                -Checkout:$Checkout
+            Write-V2Status -Name "sync" -Ok $true -Details @{
+                local_sync = $result
+            }
+            break
+        }
         default {
             $remoteRunRoot = Get-AutoresearchV2RemoteRunRoot -Config $v2Config -RunTag $RunTag
             $remoteSpecRoot = $remoteRunRoot + "/spec"
@@ -233,6 +268,7 @@ try {
                     target = $targetFull
                     remote_upload_root = $remoteUploadSpecRoot
                 }
+                $null = Sync-AutoresearchV2LocalAfterBridge -RunTag $RunTag
                 break
             }
 
@@ -294,9 +330,14 @@ try {
                         $argsList += @("--note", $Note)
                     }
                     $result = Invoke-AutoresearchV2Bridge -RemoteAccess $remoteAccess -V2Config $v2Config -Arguments $argsList -AllowFailure
-                    Complete-V2BridgeResult -Name "apply" -Result $result -Details @{
-                        source = $sourceFull.Path
-                    }
+                    Complete-V2BridgeResult `
+                        -Name "apply" `
+                        -Result $result `
+                        -Details @{ source = $sourceFull.Path } `
+                        -OnSuccess {
+                            param($payload)
+                            $null = Sync-AutoresearchV2LocalAfterBridge -RunTag $RunTag
+                        }
                     break
                 }
                 "baseline" { $bridgeCommand = "baseline" }
@@ -340,23 +381,29 @@ try {
                     }
                 }
                 $result = Invoke-AutoresearchV2Bridge -RemoteAccess $remoteAccess -V2Config $v2Config -Arguments $argsList -AllowFailure
-                $collectResults = $null
+                $onSuccess = $null
                 if ($Mode -eq "collect") {
-                    $collectResults = {
+                    $onSuccess = {
                         param($payload)
                         if ($null -eq $payload) { return }
-                    $localCollectRoot = Join-Path $localRunDir "collected"
-                    if (Test-Path -LiteralPath $localCollectRoot) {
-                        Remove-Item -Recurse -Force -LiteralPath $localCollectRoot
+                        $localCollectRoot = Join-Path $localRunDir "collected"
+                        if (Test-Path -LiteralPath $localCollectRoot) {
+                            Remove-Item -Recurse -Force -LiteralPath $localCollectRoot
+                        }
+                        Copy-AutoresearchFromRemote `
+                            -Access $remoteAccess `
+                            -RemotePath ([string] $payload.run_root) `
+                            -LocalPath $localCollectRoot `
+                            -Recurse | Out-Null
+                        $null = Sync-AutoresearchV2LocalAfterBridge -RunTag $RunTag
                     }
-                    Copy-AutoresearchFromRemote `
-                        -Access $remoteAccess `
-                        -RemotePath ([string] $payload.run_root) `
-                        -LocalPath $localCollectRoot `
-                        -Recurse | Out-Null
+                } elseif ($Mode -in @("baseline", "run", "resume", "sync-best")) {
+                    $onSuccess = {
+                        param($payload)
+                        $null = Sync-AutoresearchV2LocalAfterBridge -RunTag $RunTag
                     }
                 }
-                Complete-V2BridgeResult -Name $Mode -Result $result -OnSuccess $collectResults
+                Complete-V2BridgeResult -Name $Mode -Result $result -OnSuccess $onSuccess
             }
         }
     }

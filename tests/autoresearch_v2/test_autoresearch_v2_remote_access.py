@@ -22,6 +22,7 @@ class AutoresearchV2RemoteAccessTest(unittest.TestCase):
             "scripts/remote/autoresearch-v2.ps1",
             "scripts/remote/lib/common.ps1",
             "scripts/remote/lib/config.ps1",
+            "scripts/remote/lib/profile_session_state.ps1",
             "scripts/remote/lib/remote_access.ps1",
             "scripts/remote/lib/autoresearch_v2.ps1",
         ):
@@ -44,6 +45,8 @@ class AutoresearchV2RemoteAccessTest(unittest.TestCase):
                         'fake-profile' = @{
                             RemoteHost = 'fake-remote'
                             SelectionOrder = 1
+                            ExpectedHostname = 'fake-host'
+                            ExpectedUser = 'fake-user'
                             RemoteControllerRoot = '/srv/fake-profile/autoresearch-v2'
                             RemoteRunRoot = '/srv/fake-profile/autoresearch-v2/runs'
                             RemoteWorktreeRoot = '/srv/fake-profile/autoresearch-v2/worktrees'
@@ -53,6 +56,8 @@ class AutoresearchV2RemoteAccessTest(unittest.TestCase):
                         'fake-alt' = @{
                             RemoteHost = 'fake-alt'
                             SelectionOrder = 2
+                            ExpectedHostname = 'fake-alt-host'
+                            ExpectedUser = 'fake-alt-user'
                             RemoteControllerRoot = '/srv/fake-alt/autoresearch-v2'
                             RemoteRunRoot = '/srv/fake-alt/autoresearch-v2/runs'
                             RemoteWorktreeRoot = '/srv/fake-alt/autoresearch-v2/worktrees'
@@ -75,6 +80,8 @@ class AutoresearchV2RemoteAccessTest(unittest.TestCase):
         self.ssh_config = self.workspace / "ssh_config"
         self.ssh_config.write_text("Host fake-remote\n", encoding="ascii")
         self.ssh_log = self.workspace / "ssh-log.json"
+        self.session_state_root = self.workspace / "session-state"
+        self.thread_id = "test-thread"
         fake_script = self.workspace / "fake_ssh.py"
         fake_script.write_text(
             textwrap.dedent(
@@ -87,6 +94,8 @@ class AutoresearchV2RemoteAccessTest(unittest.TestCase):
                 Path(os.environ['AR2_TEST_SSH_LOG']).write_text(
                     json.dumps(sys.argv[1:]), encoding='utf-8'
                 )
+                if os.environ.get('AR2_TEST_SSH_OUTPUT'):
+                    print(os.environ['AR2_TEST_SSH_OUTPUT'])
                 """
             ).strip()
             + "\n",
@@ -128,6 +137,7 @@ class AutoresearchV2RemoteAccessTest(unittest.TestCase):
         environment = os.environ.copy()
         environment["CODEX_TEST_SSH_EXE"] = str(self.fake_ssh)
         environment["AR2_TEST_SSH_LOG"] = str(self.ssh_log)
+        environment["AR2_TEST_SSH_OUTPUT"] = "fake-host\nfake-user"
         completed = subprocess.run(
             [
                 POWERSHELL,
@@ -164,32 +174,73 @@ class AutoresearchV2RemoteAccessTest(unittest.TestCase):
         self.assertIn("BatchMode=yes", arguments)
         self.assertIn("ConnectTimeout=5", arguments)
         self.assertIn("fake-remote", arguments)
-        self.assertEqual(arguments[-1], "exit")
+        self.assertEqual(arguments[-1], "hostname; whoami")
+        self.assertTrue(details["identity_ok"])
+
+    def run_selector(
+        self,
+        *arguments: str,
+        environment: dict[str, str] | None = None,
+    ) -> dict[str, object]:
+        env = os.environ.copy()
+        env["CODEX_THREAD_ID"] = self.thread_id
+        env["CODEX_AUTORESEARCH_STATE_ROOT"] = str(self.session_state_root)
+        if environment:
+            env.update(environment)
+        completed = subprocess.run(
+            [
+                POWERSHELL,
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(PROJECT_ROOT / "scripts" / "remote" / "select-profile.ps1"),
+                "-ProjectRoot",
+                str(self.workspace),
+                "-NonInteractive",
+                *arguments,
+            ],
+            cwd=self.workspace,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        return json.loads(completed.stdout)
 
     def test_selector_resolves_active_profile_without_interaction(self) -> None:
-        completed = subprocess.run(
-            [
-                POWERSHELL,
-                "-NoProfile",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-File",
-                str(PROJECT_ROOT / "scripts" / "remote" / "select-profile.ps1"),
-                "-ProjectRoot",
-                str(self.workspace),
-                "-NonInteractive",
-            ],
-            cwd=self.workspace,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
-        result = json.loads(completed.stdout)
+        result = self.run_selector()
         self.assertEqual(result["remote_profile"], "fake-profile")
         self.assertEqual(result["remote_host"], "fake-remote")
+        self.assertFalse(result["locked"])
 
     def test_selector_validates_explicit_profile_without_interaction(self) -> None:
+        result = self.run_selector("-RemoteProfile", "fake-alt")
+        self.assertEqual(result["remote_profile"], "fake-alt")
+        self.assertEqual(result["remote_host"], "fake-alt")
+
+    def test_session_lock_reused_until_force_switch(self) -> None:
+        first = self.run_selector()
+        self.assertFalse(first["locked"])
+
+        reused = self.run_selector()
+        self.assertTrue(reused["locked"])
+        self.assertEqual(reused["remote_profile"], "fake-profile")
+
+        switched = self.run_selector("-RemoteProfile", "fake-alt", "-Force")
+        self.assertFalse(switched["locked"])
+        self.assertEqual(switched["remote_profile"], "fake-alt")
+
+        reused_after_switch = self.run_selector()
+        self.assertTrue(reused_after_switch["locked"])
+        self.assertEqual(reused_after_switch["remote_profile"], "fake-alt")
+
+    def test_access_doctor_fails_on_remote_identity_mismatch(self) -> None:
+        environment = os.environ.copy()
+        environment["CODEX_TEST_SSH_EXE"] = str(self.fake_ssh)
+        environment["AR2_TEST_SSH_LOG"] = str(self.ssh_log)
+        environment["AR2_TEST_SSH_OUTPUT"] = "wrong-host\nwrong-user"
         completed = subprocess.run(
             [
                 POWERSHELL,
@@ -197,22 +248,25 @@ class AutoresearchV2RemoteAccessTest(unittest.TestCase):
                 "-ExecutionPolicy",
                 "Bypass",
                 "-File",
-                str(PROJECT_ROOT / "scripts" / "remote" / "select-profile.ps1"),
-                "-ProjectRoot",
-                str(self.workspace),
+                str(self.workspace / "scripts" / "remote" / "autoresearch-v2.ps1"),
+                "-Mode",
+                "access-doctor",
                 "-RemoteProfile",
-                "fake-alt",
-                "-NonInteractive",
+                "fake-profile",
+                "-SshConfigPath",
+                str(self.ssh_config),
+                "-Json",
             ],
             cwd=self.workspace,
+            env=environment,
             capture_output=True,
             text=True,
             check=False,
         )
-        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        self.assertEqual(completed.returncode, 1, completed.stdout + completed.stderr)
         result = json.loads(completed.stdout)
-        self.assertEqual(result["remote_profile"], "fake-alt")
-        self.assertEqual(result["remote_host"], "fake-alt")
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["details"]["remote_access"]["remote_hostname"], "wrong-host")
 
     def test_scp_directions_share_transport_arguments(self) -> None:
         environment = os.environ.copy()

@@ -36,7 +36,7 @@ class AutoresearchV2ModePolicyTest(unittest.TestCase):
         self.assertFalse(autoresearch["modes"]["invoke"]["may_modify_sealed_paths"])
         self.assertTrue(autoresearch["modes"]["develop"]["may_modify_sealed_paths"])
         self.assertIn(".agents/skills/codex-autoresearch-v2/**", autoresearch["sealed_paths"])
-        self.assertIn("scripts/remote/access/**", autoresearch["sealed_paths"])
+        self.assertIn("scripts/remote/lib/profile_session_state.ps1", autoresearch["sealed_paths"])
         self.assertIn("scripts/remote/lib/remote_access.ps1", autoresearch["sealed_paths"])
         self.assertIn("scripts/package-autoresearch-v2-plugin.ps1", autoresearch["sealed_paths"])
         self.assertIn(".codex/research-policy.json", autoresearch["sealed_paths"])

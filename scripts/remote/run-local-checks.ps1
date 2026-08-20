@@ -39,9 +39,9 @@ $criticalScripts = @(
     "autoresearch-v2.ps1",
     "smoke-autoresearch-v2.ps1",
     "select-profile.ps1",
-    "access\select-remote-profile.ps1",
     "lib\common.ps1",
     "lib\config.ps1",
+    "lib\profile_session_state.ps1",
     "lib\remote_access.ps1",
     "lib\autoresearch_v2.ps1",
     "remote-bin\autoresearch_v2_common.py",
@@ -75,6 +75,7 @@ foreach ($relative in $projectFiles) {
 $expectedExperimentIdRegex = '^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$'
 $commonText = Get-Content -LiteralPath (Join-Path $remoteScriptRoot "lib\common.ps1") -Raw
 $configText = Get-Content -LiteralPath (Join-Path $remoteScriptRoot "lib\config.ps1") -Raw
+$sessionText = Get-Content -LiteralPath (Join-Path $remoteScriptRoot "lib\profile_session_state.ps1") -Raw
 $accessText = Get-Content -LiteralPath (Join-Path $remoteScriptRoot "lib\remote_access.ps1") -Raw
 $readmeText = Get-Content -LiteralPath (Join-Path $remoteScriptRoot "README.md") -Raw
 Add-Check `
@@ -85,6 +86,10 @@ Add-Check `
     -Name "remote_access_layer_owned" `
     -Ok ($configText.Contains("function Get-AutoresearchConfiguration") -and $accessText.Contains("function Get-AutoresearchRemoteAccess") -and $accessText.Contains("function Invoke-AutoresearchRemoteCommand") -and $accessText.Contains("function Copy-AutoresearchToRemote") -and $accessText.Contains("function Test-AutoresearchRemoteHttpProxy")) `
     -Detail "The integrated access layer must own configuration, Profiles, SSH/SCP, and proxy diagnostics."
+Add-Check `
+    -Name "session_profile_lock_owned" `
+    -Ok ($sessionText.Contains("function Resolve-AutoresearchSessionProfile") -and $sessionText.Contains("function Save-AutoresearchSessionProfile") -and $sessionText.Contains("CODEX_THREAD_ID")) `
+    -Detail "Profile selection must be locked per Codex session."
 
 $v2ScriptText = Get-Content -LiteralPath (Join-Path $remoteScriptRoot "autoresearch-v2.ps1") -Raw
 $v2LibText = Get-Content -LiteralPath (Join-Path $remoteScriptRoot "lib\autoresearch_v2.ps1") -Raw
@@ -95,15 +100,20 @@ $policy = Read-JsonFile -Path (Join-Path $projectRoot ".codex\research-policy.js
 $invokeSkillText = Get-Content -LiteralPath (Join-Path $projectRoot ".agents\skills\codex-autoresearch-v2\SKILL.md") -Raw
 $devSkillText = Get-Content -LiteralPath (Join-Path $projectRoot ".agents\skills\codex-autoresearch-v2-dev\SKILL.md") -Raw
 $plugin = Read-JsonFile -Path (Join-Path $projectRoot "plugins\codex-autoresearch-v2\.codex-plugin\plugin.json")
+$exampleConfigText = Get-Content -LiteralPath (Join-Path $projectRoot "config\autoresearch-v2.example.psd1") -Raw
 
 Add-Check `
     -Name "v2_modes_declared" `
-    -Ok ($v2ScriptText.Contains('"access-doctor", "access-ensure", "deploy", "doctor", "bootstrap", "inspect", "apply", "baseline", "run", "resume", "status", "collect", "stop", "sync-best"')) `
+    -Ok ($v2ScriptText.Contains('"access-doctor", "access-ensure", "deploy", "doctor", "bootstrap", "inspect", "apply", "baseline", "run", "resume", "status", "collect", "stop", "sync-best", "sync"')) `
     -Detail "autoresearch-v2.ps1 should expose the unified control surface."
 Add-Check `
     -Name "v2_remote_roots_declared" `
     -Ok ($v2LibText.Contains("RemoteControllerRoot") -and $v2LibText.Contains("RemoteRunRoot") -and $v2LibText.Contains("RemoteWorktreeRoot") -and $v2LibText.Contains("RemoteLeaseRoot")) `
     -Detail "autoresearch_v2.ps1 helper should carry remote controller roots."
+Add-Check `
+    -Name "v2_local_git_sync_declared" `
+    -Ok ($v2ScriptText.Contains('"sync"') -and $v2ScriptText.Contains('-FetchBranch $CheckoutBranch') -and $v2LibText.Contains("function Sync-AutoresearchV2LocalRepository") -and $v2LibText.Contains("function Invoke-AutoresearchV2LocalFetchBranch") -and $v2LibText.Contains('$FetchBranch') -and $exampleConfigText.Contains("LocalRepositoryPath") -and $exampleConfigText.Contains("LocalGitRemoteName") -and $exampleConfigText.Contains("LocalGitRemoteUrl")) `
+    -Detail "Direct server git remote synchronization should be configurable through the v2 controller."
 Add-Check `
     -Name "smoke_script_requires_explicit_generic_inputs" `
     -Ok ($smokeText.Contains('[string] $TargetPath') -and $smokeText.Contains('[string] $ProgramPath') -and $smokeText.Contains('-Mode doctor')) `
@@ -118,7 +128,7 @@ Add-Check `
     -Detail "The example program should not embed a project or experiment stage."
 Add-Check `
     -Name "generic_remote_support_declared" `
-    -Ok ($readmeText.Contains("access-doctor") -and $readmeText.Contains("access-ensure") -and $readmeText.Contains("select-profile.ps1") -and $readmeText.Contains("lib/remote_access.ps1")) `
+    -Ok ($readmeText.Contains("access-doctor") -and $readmeText.Contains("access-ensure") -and $readmeText.Contains("select-profile.ps1") -and $readmeText.Contains("lib/remote_access.ps1") -and $readmeText.Contains("lib/profile_session_state.ps1")) `
     -Detail "Remote access must be documented as part of the unified Autoresearch controller."
 Add-Check `
     -Name "autoresearch_modes_declared" `

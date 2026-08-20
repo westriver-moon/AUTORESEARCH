@@ -13,8 +13,8 @@ RUNTIME = PROJECT_ROOT / "scripts" / "remote" / "remote-bin"
 CONFIG = PROJECT_ROOT / "config" / "autoresearch-v2.example.psd1"
 ACCESS = PROJECT_ROOT / "scripts" / "remote" / "lib" / "remote_access.ps1"
 CONFIG_LIBRARY = PROJECT_ROOT / "scripts" / "remote" / "lib" / "config.ps1"
+SESSION_STATE = PROJECT_ROOT / "scripts" / "remote" / "lib" / "profile_session_state.ps1"
 SELECTOR = PROJECT_ROOT / "scripts" / "remote" / "select-profile.ps1"
-SELECTOR_UI = PROJECT_ROOT / "scripts" / "remote" / "access" / "select-remote-profile.ps1"
 POWERSHELL = shutil.which("pwsh") or shutil.which("powershell.exe") or "powershell.exe"
 
 
@@ -57,8 +57,8 @@ class RemoteAutoresearchV2WrapperTest(unittest.TestCase):
             f"[void][System.Management.Automation.Language.Parser]::ParseFile('{SMOKE}',[ref]$null,[ref]$errors); "
             f"[void][System.Management.Automation.Language.Parser]::ParseFile('{ACCESS}',[ref]$null,[ref]$errors); "
             f"[void][System.Management.Automation.Language.Parser]::ParseFile('{CONFIG_LIBRARY}',[ref]$null,[ref]$errors); "
+            f"[void][System.Management.Automation.Language.Parser]::ParseFile('{SESSION_STATE}',[ref]$null,[ref]$errors); "
             f"[void][System.Management.Automation.Language.Parser]::ParseFile('{SELECTOR}',[ref]$null,[ref]$errors); "
-            f"[void][System.Management.Automation.Language.Parser]::ParseFile('{SELECTOR_UI}',[ref]$null,[ref]$errors); "
             "if($errors.Count -gt 0){$errors | ForEach-Object {Write-Error $_}; exit 1}"
         )
         completed = subprocess.run(

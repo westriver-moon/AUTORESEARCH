@@ -9,6 +9,8 @@ function Get-DefaultAutoresearchRemoteAccess {
         LocalTunnelScript = ""
         ProxyTaskName = ""
         ConnectTimeoutSec = 15
+        ExpectedHostname = ""
+        ExpectedUser = ""
         LocalProxyPort = 7897
         ProxyPort = 7897
         ProxyProbeUrl = "https://github.com"
@@ -32,133 +34,30 @@ function Merge-AutoresearchRemoteAccessValues {
     }
 }
 
-function Select-AutoresearchRemoteProfile {
-    param(
-        [Parameter(Mandatory = $true)]
-        [hashtable] $Profiles,
-        [string] $DefaultProfile = ""
-    )
-
-    if ($Profiles.Count -eq 0) {
-        return ""
-    }
-
-    $rows = @()
-    foreach ($name in $Profiles.Keys) {
-        $entry = $Profiles[$name]
-        if (-not ($entry -is [hashtable])) {
-            throw "RemoteProfiles['$name'] must be a hashtable."
-        }
-        $rows += [pscustomobject]@{
-            Profile = [string] $name
-            RemoteHost = if ($entry.ContainsKey("RemoteHost")) { [string] $entry.RemoteHost } else { "" }
-            DisplayName = if ($entry.ContainsKey("DisplayName")) { [string] $entry.DisplayName } else { [string] $name }
-            HostAddress = if ($entry.ContainsKey("HostAddress")) { [string] $entry.HostAddress } else { "" }
-            Port = if ($entry.ContainsKey("Port")) { [string] $entry.Port } else { "" }
-            User = if ($entry.ContainsKey("User")) { [string] $entry.User } else { "" }
-            SelectionOrder = if ($entry.ContainsKey("SelectionOrder")) { [int] $entry.SelectionOrder } else { 9999 }
-        }
-    }
-    $rows = @($rows | Sort-Object SelectionOrder, Profile)
-    if ($rows.Count -eq 1) {
-        return [string] $rows[0].Profile
-    }
-
-    $defaultIndex = 1
-    for ($index = 0; $index -lt $rows.Count; $index++) {
-        if ($rows[$index].Profile -eq $DefaultProfile) {
-            $defaultIndex = $index + 1
-            break
-        }
-    }
-
-    $remoteScriptRoot = Split-Path -Parent $PSScriptRoot
-    $selectorScript = Join-Path $remoteScriptRoot "access\select-remote-profile.ps1"
-    if (-not (Test-Path -LiteralPath $selectorScript)) {
-        throw "Remote profile selector was not found: $selectorScript"
-    }
-
-    $requestPath = [System.IO.Path]::GetTempFileName()
-    $resultPath = [System.IO.Path]::GetTempFileName()
-    try {
-        $request = [pscustomobject]@{
-            default_index = $defaultIndex
-            profiles = @($rows | ForEach-Object {
-                [pscustomobject]@{
-                    profile = $_.Profile
-                    server = $_.DisplayName
-                    ip = $_.HostAddress
-                    port = $_.Port
-                    user = $_.User
-                }
-            })
-        }
-        Set-Content -LiteralPath $requestPath -Value ($request | ConvertTo-Json -Depth 4) -Encoding UTF8
-        Remove-Item -LiteralPath $resultPath -Force
-
-        $powershellExe = (Get-Command powershell.exe -ErrorAction Stop).Source
-        $arguments = @(
-            "-NoProfile",
-            "-ExecutionPolicy", "Bypass",
-            "-File", ('"{0}"' -f $selectorScript),
-            "-RequestPath", ('"{0}"' -f $requestPath),
-            "-ResultPath", ('"{0}"' -f $resultPath)
-        )
-        Write-Host "[codex-autoresearch-v2] Opening remote profile selector."
-        $process = Start-Process -FilePath $powershellExe -ArgumentList $arguments -Wait -PassThru -WindowStyle Normal
-        if (($process.ExitCode -ne 0) -or (-not (Test-Path -LiteralPath $resultPath))) {
-            return ""
-        }
-
-        $selected = (Get-Content -LiteralPath $resultPath -Raw).Trim()
-        if ($rows.Profile -notcontains $selected) {
-            throw "Remote profile selector returned an unknown profile: $selected"
-        }
-        return $selected
-    } finally {
-        Remove-Item -LiteralPath $requestPath -Force -ErrorAction SilentlyContinue
-        Remove-Item -LiteralPath $resultPath -Force -ErrorAction SilentlyContinue
-    }
-}
-
 function Get-AutoresearchRemoteAccess {
     param(
         [Parameter(Mandatory = $true)]
         [string] $ProjectRoot,
         [string] $RemoteProfile = "",
         [string] $RemoteHost = "",
-        [string] $SshConfigPath = "",
-        [switch] $AllowInteractiveProfileSelection
+        [string] $SshConfigPath = ""
     )
 
     $configuration = Get-AutoresearchConfiguration -ProjectRoot $ProjectRoot
     $access = Get-DefaultAutoresearchRemoteAccess
     Merge-AutoresearchRemoteAccessValues -Destination $access -Source $configuration
 
-    $profiles = @{}
-    if ($configuration.ContainsKey("RemoteProfiles")) {
-        if (-not ($configuration.RemoteProfiles -is [hashtable])) {
-            throw "RemoteProfiles must be a hashtable."
-        }
-        $profiles = $configuration.RemoteProfiles
-    }
-
     $selectedProfile = $RemoteProfile
     $activeProfile = if ($configuration.ContainsKey("ActiveRemoteProfile")) { [string] $configuration.ActiveRemoteProfile } else { "" }
-    if ([string]::IsNullOrWhiteSpace($selectedProfile) -and $AllowInteractiveProfileSelection -and $profiles.Count -gt 0) {
-        $selectedProfile = Select-AutoresearchRemoteProfile -Profiles $profiles -DefaultProfile $activeProfile
-        if ([string]::IsNullOrWhiteSpace($selectedProfile)) {
-            throw "Remote profile selection was cancelled."
-        }
-    } elseif ([string]::IsNullOrWhiteSpace($selectedProfile)) {
+    if ([string]::IsNullOrWhiteSpace($selectedProfile)) {
         $selectedProfile = $activeProfile
     }
 
     if (-not [string]::IsNullOrWhiteSpace($selectedProfile)) {
-        if (-not $profiles.ContainsKey($selectedProfile)) {
+        if (-not $configuration.RemoteProfiles.ContainsKey($selectedProfile)) {
             throw "Remote profile '$selectedProfile' was not found in RemoteProfiles."
         }
-        Merge-AutoresearchRemoteAccessValues -Destination $access -Source $profiles[$selectedProfile]
+        Merge-AutoresearchRemoteAccessValues -Destination $access -Source $configuration.RemoteProfiles[$selectedProfile]
         $access.SelectedRemoteProfile = $selectedProfile
     }
 
@@ -375,7 +274,7 @@ function Test-AutoresearchRemoteAccess {
         proxy_mode = [string] $Access.ProxyMode
     }
     $sshResult = if ($details.ssh_config_exists) {
-        Invoke-AutoresearchRemoteCommand -Access $Access -RemoteCommand "exit" -AllowFailure
+        Invoke-AutoresearchRemoteCommand -Access $Access -RemoteCommand "hostname; whoami" -AllowFailure
     } else {
         [pscustomobject]@{ exit_code = -1; output = "SSH config was not found." }
     }
@@ -398,7 +297,25 @@ function Test-AutoresearchRemoteAccess {
         $details.remote_proxy_http_diagnostic = $proxyResult.output
     }
 
-    $sshOk = [bool] ($details.ssh_config_exists -and ($sshResult.exit_code -eq 0))
+    $identityOk = $true
+    $identity = @($sshResult.output -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if ($identity.Count -ge 2) {
+        $details.remote_hostname = $identity[0]
+        $details.remote_user = $identity[-1]
+        $expectedHostname = if ($Access.ContainsKey("ExpectedHostname")) { [string] $Access.ExpectedHostname } else { "" }
+        $expectedUser = if ($Access.ContainsKey("ExpectedUser")) { [string] $Access.ExpectedUser } else { "" }
+        if (-not [string]::IsNullOrWhiteSpace($expectedHostname)) {
+            $details.expected_hostname = $expectedHostname
+            $identityOk = $identityOk -and ($details.remote_hostname -eq $expectedHostname)
+        }
+        if (-not [string]::IsNullOrWhiteSpace($expectedUser)) {
+            $details.expected_user = $expectedUser
+            $identityOk = $identityOk -and ($details.remote_user -eq $expectedUser)
+        }
+    }
+    $details.identity_ok = $identityOk
+
+    $sshOk = [bool] ($details.ssh_config_exists -and ($sshResult.exit_code -eq 0) -and $identityOk)
     $proxyOk = [bool] ((-not $proxyRequired) -or ($details.local_proxy_port_open -and $details.remote_proxy_http_ok))
     return [pscustomobject]@{ ok = [bool] ($sshOk -and $proxyOk); details = $details }
 }
